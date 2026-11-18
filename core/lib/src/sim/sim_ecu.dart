@@ -1,8 +1,6 @@
 /// A simulated ECU for demo mode and tests. It holds its own copy of a calibration, answers what the connect sequence
 /// and the editors ask, applies writes to its copy and streams live reports while reporting is on. Ported from the
 /// TypeScript project's `ecu-sim.ts` (requirement W02 S01–S11); not something the original tool had.
-///
-/// Not yet simulated, waiting for `can/`: the CAN ids reserved by the driver's own streams (2/3 answers with none).
 library;
 
 import 'dart:async';
@@ -11,6 +9,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../calibration/calibration.dart';
+import '../can/custom_can.dart';
 import '../definition/definition.dart';
 import '../wire/bytes.dart';
 import '../wire/framing.dart';
@@ -189,7 +188,15 @@ class SimEcu {
       case (2, 2):
         reply(2, 2, [0, ..._u16(id)]);
       case (2, 3):
-        reply(2, 3, [0, 0]); // no reserved CAN ids yet
+        final ids = reservedCanIds(definition.drivers[8224], c.drivers[8224]?.config);
+        reply(2, 3, [
+          0,
+          ids.length,
+          for (final r in ids) ...[
+            ..._u32(r.messageId),
+            (r.receives ? 1 : 0) | (r.transmits ? 2 : 0) | (r.secondary ? 4 : 0),
+          ],
+        ]);
       case (0, 2):
         setReporting(p.isNotEmpty && p[0] == 1);
         reply(0, 2, [0]);
@@ -300,6 +307,7 @@ double simValue(int id, double min, double max, double t) {
 }
 
 List<int> _u16(int v) => [v & 0xff, (v >> 8) & 0xff];
+List<int> _u32(int v) => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
 
 /// [v] as a little-endian float.
 List<int> f32Bytes(double v) => (ByteData(4)..setFloat32(0, v, Endian.little)).buffer.asUint8List();

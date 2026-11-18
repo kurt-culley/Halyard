@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -675,6 +675,79 @@ write('live.json', liveCases);
     cases.push({ unit, v: hex(f32(v)), check, from: hex(f32(U.fromRaw(unit, v, check))), to: hex(f32(U.toRaw(unit, v, check))) });
   }
   write('units.json', cases);
+}
+
+// ---------------------------------------------------------------- custom CAN: bit packing, ids, the config blob, checks
+{
+  const C = await src('custom-can.ts');
+  const { DriverModelParam, DriverModel } = await src('driver.ts');
+  const bits = Array.from({ length: 400 }, () => {
+    const frame = Uint8Array.from(bytes(8));
+    const start = rnd() < 0.9 ? int(64) : pick([-1, 64, 70]), len = rnd() < 0.9 ? 1 + int(64) : pick([0, 65]);
+    const be = rnd() < 0.5;
+    const value = (BigInt(int(2 ** 32)) << 32n) | BigInt(int(2 ** 32));
+    const packed = Uint8Array.from(frame); C.pack(packed, start, len, be, value);
+    const x = C.extract(frame, start, len, be);
+    return { frame: hex(frame), start, len, be, valid: C.spanValid(start, len, be), extract: x.toString(16), value: value.toString(16),
+      packed: hex(packed), signed: C.signExtend(x, len).toString(16) };
+  });
+  const idTexts = ['', ' ', '0x7FF', '7ff', '&H1FFFFFFF', '0X20000000', '1FFFFFFF', '123456789', ' 0x12 ', '0x', 'xyz', '-1', '+1', '\t7e8\n', '0x 12', '00000000',
+    ...Array.from({ length: 30 }, () => (rnd() < 0.5 ? '0x' : '') + int(2 ** 30).toString(16))];
+  const ids = idTexts.map((t) => ({ text: t, id: C.tryParseCanId(t), ext: C.tryParseCanId(t) === null ? null : C.isExtendedId(C.tryParseCanId(t)), fmt: C.tryParseCanId(t) === null ? null : C.formatCanId(C.tryParseCanId(t)) }));
+  const randConfig = () => {
+    const c = new C.CustomCanConfig();
+    for (const m of c.rxMessages) {
+      Object.assign(m, { enabled: rnd() < 0.5, canId: rnd() < 0.8 ? int(0x800) : int(2 ** 32), extended: rnd() < 0.3, bigEndian: rnd() < 0.5, muxEnabled: rnd() < 0.3,
+        muxStartBit: int(70), muxBitLength: int(40), muxMatch: int(2 ** 32) });
+      for (const sg of m.signals) Object.assign(sg, { enabled: rnd() < 0.5, format: int(4), startBit: int(70), bitLength: int(70), mult: pick([1, 0, 0.1, NaN, Infinity, oddF32()]),
+        offset: oddF32(), timeoutMs: int(65536), fallback: oddF32(), dstLinkId: pick([0, 1, 2, 3, 999, int(65536)]) });
+    }
+    for (const m of c.txMessages) {
+      Object.assign(m, { enabled: rnd() < 0.5, canId: rnd() < 0.8 ? int(0x800) : int(2 ** 32), extended: rnd() < 0.3, mode: int(4), freqHz: pick([0, 1, 10, 1000, 1001, int(65536)]),
+        triggerLinkId: pick([0, 1, 999]) });
+      for (const sg of m.signals) Object.assign(sg, { enabled: rnd() < 0.5, bigEndian: rnd() < 0.5, signed: rnd() < 0.5, startBit: int(70), bitLength: int(70),
+        mult: pick([1, 0, -2.5, NaN]), offset: oddF32(), srcLinkId: pick([0, 1, 999]), constValue: oddF32() });
+    }
+    return c;
+  };
+  const linkSet = new Set([1, 2, 3]);
+  const reserved = new Set([0x700, 0x340, 0x1ba]);
+  const msgs = (v) => ({ errors: v.errors, warnings: v.warnings });
+  const configs = Array.from({ length: 40 }, () => {
+    const c = randConfig();
+    const blob = c.encode();
+    const v = C.validate(c, (id) => linkSet.has(id), rnd() < 0.5 ? reserved : null);
+    const mutated = Uint8Array.from(blob); for (let k = 0; k < 20; k++) mutated[4 + int(C.BLOB_SIZE - 4)] = int(256); if (rnd() < 0.15) mutated[0] = int(256);
+    const d = C.CustomCanConfig.decode(mutated);
+    return { blob: hex(blob), rx: v.rx.map(msgs), tx: v.tx.map(msgs), mutated: hex(mutated), wasReset: d.wasReset, reencoded: hex(d.encode()) };
+  });
+  const reservedIds = Array.from({ length: 20 }, () => {
+    const d = new DriverModel();
+    const names = ['Pri. Stream Selection', 'Sec. Stream Selection', 'Other'];
+    const params = Array.from({ length: int(4) }, () => { const p = new DriverModelParam(); p.name = pick(names); p.value = pick([0, 1, 2, 3, 4, 5, 6, 2.7, -1, NaN]); return p; });
+    d.numberOfConfigs = params.length; d.setConfigParams(params);
+    return { params: params.map((p) => [p.name, hex(f32(p.value))]), ids: C.getForCanSettings(d) };
+  });
+  write('custom_can.json', [{ bits, ids, configs, reservedIds }]);
+}
+
+// ---------------------------------------------------------------- simulator: CAN ids reserved by the CAN settings driver
+{
+  globalThis.setInterval = () => ({}); globalThis.clearInterval = () => {};
+  const cases = [];
+  for (let i = 0; i < 12; i++) {
+    const params = Array.from({ length: 1 + int(4) }, () => el('DriverModelParam', el('name', pick(['Pri. Stream Selection', 'Sec. Stream Selection', 'Baud'])) +
+      el('value', String(pick([0, 1, 2, 3, 4, 5, 6, 2.5])))));
+    const xml = simXml().replace('<drivers>', '<drivers>' + el('DriverModel', el('id', '8224') + el('numberOfConfigs', String(params.length)) +
+      el('configParams', params.join('')) + el('numberOfOutputs', '0') + el('numberOfInputs', '0')));
+    const ecu = new SimEcu(DeviceDataModel.fromXml(xml, null), {});
+    const replies = [];
+    ecu.reply = (cls, cmd, p) => replies.push(hex([0x0f, cls, cmd, ...p]));
+    ecu.handle(drivers.getCanReservedIdsRequest());
+    cases.push({ xml, replies });
+  }
+  globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
+  write('sim_can.json', cases);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

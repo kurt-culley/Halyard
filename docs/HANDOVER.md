@@ -54,6 +54,7 @@ regenerates every vector file byte for byte.
 | Live data store | `core/lib/src/live/` |
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
 | Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
+| Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids | `core/lib/src/can/` |
 
 ### What the second session changed and found
 
@@ -68,8 +69,7 @@ regenerates every vector file byte for byte.
   - `LinkDef.textValues` is null when the file has no list, so an empty list survives a save.
   - `parseTableBlob` and `parseDriverBlob` apply over the current values. A curve's wire form has no row axis, which
     zeroed it before.
-- **Simulator.** Ported except the CAN ids reserved by the driver's own streams (2/3 answers with none), which waits
-  for `core/can`. The fault log is off until `ecu.faults.seed()`, as in the TypeScript simulator. It has a password
+- **Simulator.** Fully ported. The fault log is off until `ecu.faults.seed()`, as in the TypeScript simulator. It has a password
   option the TypeScript simulator lacks; the generator patches the TypeScript simulator the same way. Table-data writes
   assume one float per offset; the wire form doesn't say, and the editors only send one.
 - **Session.** Reacts to every successful identity reply. On the same kind of ECU it confirms the overall hash or reads
