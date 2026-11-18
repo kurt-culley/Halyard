@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -602,6 +602,56 @@ for (let i = 0; i < 6; i++) {
   liveCases.push({ xml: lastSimXml, steps, histories });
 }
 write('live.json', liveCases);
+
+// ---------------------------------------------------------------- playback: pausing, seeking back and going live again
+// Reports as in live.json, mixed with the playback strip's model calls; after each step every link's value, its
+// shown history length and the strip's can-seek answer for a few positions. Loading uses a recording's columns.
+const { PlaybackStripModel } = await src('playback.ts');
+const playbackCases = [];
+for (let i = 0; i < 5; i++) {
+  const m = DeviceDataModel.fromXml(simXml(), null);
+  let ticks = 0n;
+  const h = new ProtocolServiceMessageHandler({ setReportingState() {}, sendMessageFrame() {} },
+    { defs: { getDeviceDataModel: () => null }, makeInfo: () => ({}), lifesignMs: 1e6, nowTicks: () => ticks });
+  h.model = m;
+  let recording = new Map();
+  const strip = new PlaybackStripModel({ deviceDataModel: m, csvWriter: { save() {}, load: () => recording } });
+  const ids = [...m.allDataLinks.keys()];
+  const links = [...m.allDataLinks.values()];
+  let at = Date.UTC(2026, 10, 18, 9, 0, 0) + int(1e6);
+  const steps = [];
+  for (let k = 0, n = i === 0 ? 1500 : 150 + int(200); k < n; k++) {
+    const r = rnd();
+    let step;
+    if (r < 0.04) { strip.pause(); step = { op: 'pause' }; }
+    else if (r < 0.07) { strip.live(); step = { op: 'live' }; }
+    else if (r < 0.12) { const back = rnd() < 0.8 ? int(60) : int(1300); strip.seekFromTail(back); step = { op: 'seek', back }; }
+    else if (r < 0.13) {
+      const len = int(30);
+      const col = () => Array.from({ length: len }, (_, j) => ({ ticks: BigInt(at + j * 100) * 10000n + TICKS_AT_EPOCH, value: Math.fround(oddF32()), hasValue: true }));
+      const names = links.map((l) => l.name).filter(() => rnd() < 0.6);
+      recording = new Map([['Time', col().map((v) => ({ ...v, value: 0 }))], ...names.map((nm) => [nm, col()])]);
+      strip.load({ exists: true, readText: () => '' });
+      step = { op: 'load', columns: [...recording].map(([nm, v]) => [nm, v.map((x) => Number((x.ticks - TICKS_AT_EPOCH) / 10000n)), v.map((x) => hex(f32(x.value)))]) };
+    } else {
+      at += 1 + int(200);
+      ticks = BigInt(at) * 10000n + TICKS_AT_EPOCH;
+      const entries = Array.from({ length: int(ids.length + 3) }, () => (rnd() < 0.1 ? 3000 + int(100) : pick(ids)));
+      const payload = [0, ...le16(entries.length), ...entries.flatMap((id) => [...le16(id), ...f32(oddF32())])];
+      const frame = { type: 0x0f, cls: 0, cmd: 0, payload: Uint8Array.from(payload) };
+      h.visitReceived(frame);
+      step = { op: 'report', at, frame: frameHex(frame) };
+    }
+    step.values = links.map((l) => hex(f32(l.value)));
+    step.lengths = links.map((l) => l.historicalValues.length);
+    step.live = strip.liveStatus;
+    step.canSeek = [0, 10, 100, 1199, 1200].map((x) => strip.canSeekFromTail(x));
+    steps.push(step);
+  }
+  const histories = links.map((l) => ({ id: l.id, at: l.historicalValues.map((v) => Number((v.ticks - TICKS_AT_EPOCH) / 10000n)), values: l.historicalValues.map((v) => hex(f32(v.value))) }));
+  playbackCases.push({ xml: lastSimXml, steps, histories });
+}
+write('playback.json', playbackCases);
 
 // ---------------------------------------------------------------- faults: catalogue, stamps, records, freeze frames
 // Pure functions of the TypeScript fault module over random inputs, and scripted fault-log sessions against its

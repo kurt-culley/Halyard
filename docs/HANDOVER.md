@@ -61,6 +61,7 @@ regenerates every vector file byte for byte.
 | Log review: CSV logs into sessions, statistics, events, difference sessions | `core/lib/src/logs/log_review.dart` |
 | Log-plot decimation (MinMaxLTTB; new in Halyard, so property tests rather than vectors) | `core/lib/src/analysis/decimation.dart` |
 | Fuel tuning assistant: analysis and suggestions from live or CSV samples (applying them waits for the write gate) | `core/lib/src/analysis/tuning_assistant.dart` |
+| Playback in the live store: pause, seek back, go live (reports kept aside meanwhile), load a recording; the strip's buttons and timer are app work | `core/lib/src/live/live_store.dart` |
 | Live-data recordings: rolling CSV files of every report while a folder is set, read back for playback (times kept as milliseconds so they stay exact on the web) | `core/lib/src/logs/live_recording.dart` |
 | Table presets: `.mepres` reading and writing, a table saved as a preset, the library by table id, the import list's search. No presets ship; the library holds the user's files (where they live is app work). As in the original, a preset holding an infinite value saves as `Infinity`, which it can't read back | `core/lib/src/calibration/presets.dart` |
 | Firmware files: `.mefw` reading, Intel HEX to an image, region CRC (the update protocol waits for flashing, last in the build order) | `core/lib/src/firmware/firmware_file.dart` |
