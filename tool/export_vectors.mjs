@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings,playback,table_editing}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -602,6 +602,109 @@ for (let i = 0; i < 6; i++) {
   liveCases.push({ xml: lastSimXml, steps, histories });
 }
 write('live.json', liveCases);
+
+// ---------------------------------------------------------------- driver settings: rows, parsing, validation, link rows
+{
+  const DS = await src('driver-settings.ts');
+  const NAMES = {
+    8198: ['Mode', 'PWM Min Duty', 'PWM Max Duty', 'CL Min Duty', 'CL Max Duty', 'Frequency'],
+    8222: ['Trigger Pattern', 'Cam A Pattern', 'Cam Sync After RPM', 'Teeth'],
+    8192: ['Fueling Mode', 'Injector Size', 'Default IAT', 'Use IAT in Algorithm'],
+    8223: ['Mode', 'Dwell', 'Default IAT'],
+    8197: ['Pin', 'Pull-up'],
+  };
+  const OPTS = {
+    'Mode': ['Open Loop', 'Closed Loop', 'Wasted Spark', 'Fully Sequential', 'Wasted Spark - COPS', 'Distributor'],
+    'Trigger Pattern': ['36-1', 'Nissan SR', '60-2', 'nissan sr'],
+    'Cam A Pattern': ['None', 'Nissan SR', 'Single'],
+    'Fueling Mode': ['Batch', 'Fully Seq', 'Paired'],
+    'Use IAT in Algorithm': ['No', 'Yes'],
+  };
+  const groups = ['g1', 'g2', ''];
+  function driverXml(id, linkIds) {
+    const names = NAMES[id] ?? ['A', 'B', 'C'];
+    const nc = names.length + int(3);
+    const params = Array.from({ length: nc }, (_, k) => {
+      const name = k < names.length ? names[k] : pick(['Extra', 'Default IAT', 'Use IAT in Algorithm', 'Pin']);
+      const opts = OPTS[name];
+      const combo = !!opts && rnd() < 0.9;
+      const value = combo ? int(opts.length) : pick([0, 1, 2, 10, 25, 50, 90, 100, 255, 1.5, -1]);
+      return el('DriverModelParam', maybe(0.4, () => el('ValidationGroup', pick(groups))) + el('name', name) + maybe(0.3, () => el('DisplayName', name + ' shown')) +
+        maybe(0.3, () => el('SectionName', pick(['Basics', 'Advanced', ' ', 'Zeta']))) + el('type', combo ? 'ComboBox' : 'InputBox') +
+        maybe(0.1, () => el('readOnly', 'true')) + maybe(0.1, () => el('Hidden', 'true')) + maybe(0.2, () => el('RequiresReset', 'true')) + maybe(0.3, () => el('ToolTipText', 'tip ' + k)) +
+        el('value', String(value)) + maybe(0.5, () => el('Min', String(pick([0, 10, -5]))) + el('Max', String(pick([100, 255, 50])))) + maybe(0.5, () => el('CheckRange', pick(['true', 'false']))) +
+        maybe(0.2, () => el('ViewConstraint', el('ParamIndex', String(int(nc + 1) - (rnd() < 0.1 ? 2 : 0))) + maybe(0.8, () => el('AcceptedValues', Array.from({ length: 1 + int(2) }, () => el('float', String(int(3)))).join(''))))) +
+        (combo ? el('options', opts.map((o, j) => el('comboBoxOption', el('id', String(j)) + maybe(0.95, () => el('name', o)))).join('')) : '') +
+        maybe(0.5, () => el('MeasurementUnitTypes', Array.from({ length: 1 + int(3) }, () => `<${pick(UNIT_NAMES)} />`).join(''))));
+    });
+    const no = int(5), ni = int(5);
+    const ids = (k) => Array.from({ length: k }, () => el('unsignedShort', String(rnd() < 0.7 ? pick([0, ...linkIds]) : int(9)))).join('');
+    const val = (name) => el(name, el('CheckDuplicates', rnd() < 0.8 ? 'true' : 'false') +
+      maybe(0.6, () => el('DefaultValues', Array.from({ length: int(3) }, () => `<DefaultValue${maybe(0.5, () => ` Group="${pick(groups)}"`)} Value="${pick([0, 1, 2, 255])}" />`).join(''))) +
+      maybe(0.5, () => el('Exceptions', Array.from({ length: int(3) }, () => `<${pick(['AllowMultipleDuplicates', 'AllowIndex', 'AllowValue', 'DenyValue'])}${maybe(0.5, () => ` Group="${pick(groups)}"`)} Value="${int(4)}" />`).join(''))));
+    return el('DriverModel', el('id', String(id)) + el('name', 'Driver ' + id) + maybe(0.6, () => val('ConfigValidation')) + el('numberOfConfigs', String(nc)) + el('configParams', params.join('')) +
+      maybe(0.5, () => val('OutputValidation')) + el('numberOfOutputs', String(no)) + el('outputLinkIds', ids(no)) + maybe(0.7, () => el('editableOutputs', 'true')) +
+      maybe(0.7, () => el('outputNames', Array.from({ length: no }, (_, k) => (rnd() < 0.15 ? '<string />' : el('string', 'Out ' + k))).join(''))) +
+      maybe(0.5, () => val('InputValidation')) + maybe(0.7, () => el('editableInputs', 'true')) +
+      maybe(0.7, () => el('inputNames', Array.from({ length: ni }, (_, k) => (rnd() < 0.15 ? '<string />' : el('string', 'In ' + k))).join(''))) + el('numberOfInputs', String(ni)) +
+      el('inputLinkIds', ids(ni)) + maybe(0.3, () => el('InputLinksConfigs', Array.from({ length: 1 + int(2) }, () => el('LinkConfig', el('Index', String(int(ni + 1))) + el('Visible', pick(['true', 'false'])))).join(''))) +
+      maybe(0.3, () => el('OutputLinkConfigs', Array.from({ length: 1 + int(2) }, () => el('LinkConfig', el('Index', String(int(no + 1))) + el('Visible', pick(['true', 'false'])))).join(''))));
+  }
+  const UT = { Volt: 4, Raw: 1, Ohm: 2, KPa: 8, PSI: 16, Celsius: 32, Fahrenheit: 64 };
+  const cases = [];
+  for (let c = 0; c < 40; c++) {
+    const linkIds = Array.from({ length: 2 + int(5) }, (_, i) => 1 + i);
+    const links = linkIds.map((id) => el('DataLinkModel', el('id', String(id)) + el('name', 'L' + id) + maybe(0.4, () => el('DataTypeSet', pick(['Normal', 'ADCRaw'])))));
+    const ids = [8198, 8222, 8192, 8223, 8197, 8200].filter(() => rnd() < 0.7);
+    if (!ids.length) ids.push(8222);
+    const xml = `<ecu><links>${links.join('')}</links><drivers>${ids.map((id) => driverXml(id, linkIds)).join('')}</drivers><tables></tables></ecu>`;
+    const m = DeviceDataModel.fromXml(xml, null);
+    const units = { analogReadings: UT[pick(['Volt', 'Raw'])], analogTemperatureReadings: UT[pick(['Volt', 'Ohm', 'Raw'])], pressureReadings: UT[pick(['KPa', 'PSI'])],
+      temperatureValueReadings: UT[pick(['Celsius', 'Fahrenheit'])] };
+    const lookup = (id) => m.getDriverModel(id);
+    const edits = []; const checks = [];
+    for (let k = 0; k < 40; k++) {
+      const d = m.getDriverModel(pick(ids));
+      const ps = d.configParams.toArray();
+      const i = int(ps.length); const p = ps[i];
+      const r = rnd();
+      if (r < 0.25) {
+        const v = Math.fround(p.options && rnd() < 0.8 ? int(p.options.length + 1) : pick([0, 1, 2, 10, 25, 50, 90, 100, 255, 1.5]));
+        p.value = v; edits.push([d.id, i, v]); checks.push({ op: 'edit', driver: d.id, index: i, value: v });
+      } else if (r < 0.75) {
+        const v = Math.fround(p.options && rnd() < 0.8 ? int(p.options.length + 1) : pick([0, 1, 2, 10, 25, 50, 90, 100, 255, 1.5, -1]));
+        const res = DS.validateConfigChange(d, i, v, lookup);
+        checks.push({ op: 'validate', driver: d.id, index: i, value: v, result: res.result, message: res.message,
+          duplicates: res.duplicates.map((x) => ps.indexOf(x)), default: res.defaultValue && [res.defaultValue.group, res.defaultValue.value] });
+      } else if (r < 0.88) {
+        const text = pick(['1', '2.5', ' 3 ', 'abc', '', '-1', '70000', '1,000', 'Nissan SR', 'nissan sr', 'Batch', '0', '1e3', 'Closed Loop', 'yes']);
+        const raw = DS.parseRaw(p, text, units);
+        checks.push({ op: 'parse', driver: d.id, index: i, text, raw: raw === null ? null : hex(f32(raw)) });
+      } else {
+        const kind = pick(['input', 'output']);
+        const n = (kind === 'input' ? d.inputLinkIds : d.outputLinkIds).length;
+        if (!n) continue;
+        const li = int(n), id = rnd() < 0.7 ? pick([0, ...linkIds]) : int(9);
+        const res = DS.validateLinkChange(d, kind, li, id);
+        checks.push({ op: 'link', driver: d.id, kind, index: li, id, result: res.result, message: res.message, duplicates: res.duplicates.map((x) => x[0]),
+          default: res.defaultValue && [res.defaultValue.group, res.defaultValue.value] });
+      }
+    }
+    // after the edits: each driver's rows, read-only flags, value texts and link rows
+    const drivers = ids.map((id) => {
+      const d = m.getDriverModel(id);
+      return {
+        id,
+        rows: DS.gridRows(d, units).map((r) => [r.index, r.category, r.displayName, r.description]),
+        readOnly: d.configParams.toArray().map((p) => DS.isRowReadOnly(d, p)),
+        texts: d.configParams.toArray().map((p) => DS.valueText(p, units)),
+        links: DS.linkRows(d, m).map((r) => [r.kind, r.index, r.name, r.visible, r.items.map((l) => l.id), DS.selectedLink(r)?.id ?? null]),
+      };
+    });
+    cases.push({ xml, units: [units.analogReadings, units.analogTemperatureReadings, units.pressureReadings, units.temperatureValueReadings], checks, drivers });
+  }
+  write('driver_settings.json', cases);
+}
 
 // ---------------------------------------------------------------- playback: pausing, seeking back and going live again
 // Reports as in live.json, mixed with the playback strip's model calls; after each step every link's value, its
