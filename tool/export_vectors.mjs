@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session}.json and copies the original-decoder fuzz corpus.
+// session,live}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -403,6 +403,7 @@ write('calibration_files.json', calibrationFiles);
 const { SimEcu } = await src('ecu-sim.ts');
 const SPECIAL_LINKS = [1, 1015, 1018, 2331, 2332, 2333, 2334, 2335, 2339, 2340, 2341];
 const DBW_KEYS = ['DBW_PWM', 'DBW_BATT_V_MULT', 'TPPS1_VAL', 'TPPS2_VAL', 'TPPS1_RAW', 'TPPS2_RAW', 'RPM'];
+let lastSimXml = '';
 function simXml() {
   const ids = [...new Set([...SPECIAL_LINKS.filter(() => rnd() < 0.5), ...Array.from({ length: 3 + int(8) }, () => 3 + int(900))])];
   const links = ids.map((id) => el('DataLinkModel', el('id', String(id)) + el('name', 'L' + id) + maybe(0.6, () => el('ViewInTree', 'true')) +
@@ -424,8 +425,8 @@ function simXml() {
       el('numberOfInputs', String(ni)) + el('inputLinkIds', Array.from({ length: ni }, () => el('unsignedShort', String(int(65536)))).join('')) +
       (ps ? el('privSize', String(ps)) + el('privData', Buffer.from(bytes(ps)).toString('base64')) : ''));
   });
-  return '<ecu>' + el('DeviceDataInformationModel', el('ProductName', 'SIM-ECU') + el('ModelName', 'TEST') + el('Version', String(1 + int(99)))) +
-    `<links>${links.join('')}</links><tables>${tables.join('')}</tables><drivers>${drivers.join('')}</drivers></ecu>`;
+  return (lastSimXml = '<ecu>' + el('DeviceDataInformationModel', el('ProductName', 'SIM-ECU') + el('ModelName', 'TEST') + el('Version', String(1 + int(99)))) +
+    `<links>${links.join('')}</links><tables>${tables.join('')}</tables><drivers>${drivers.join('')}</drivers></ecu>`);
 }
 const realSetInterval = globalThis.setInterval, realClearInterval = globalThis.clearInterval;
 globalThis.setInterval = () => ({}); globalThis.clearInterval = () => {};
@@ -565,5 +566,41 @@ for (let i = 0; i < 12; i++) {
 }
 write('session.json', sessionCases);
 
+// ---------------------------------------------------------------- live data: reports applied to the model's links
+// The TypeScript handler gets report frames at set times; the vectors hold every link's value after each report (as
+// float bits, so -0 and NaN survive) and each link's history at the end. One case runs past the 1200-sample history.
+const { ProtocolServiceMessageHandler } = await src('message-handler.ts');
+const { CHANNEL_FACTORY } = kinds;
+const TICKS_AT_EPOCH = 621355968000000000n;
+const liveCases = [];
+for (let i = 0; i < 6; i++) {
+  const m = DeviceDataModel.fromXml(simXml(), null);
+  CHANNEL_FACTORY.create({ type: 0x0f, cls: 0, cmd: 2, payload: Uint8Array.from([0]) }); // reports as (id, float) pairs
+  let ticks = 0n;
+  const h = new ProtocolServiceMessageHandler({ setReportingState() {}, sendMessageFrame() {} },
+    { defs: { getDeviceDataModel: () => null }, makeInfo: () => ({}), lifesignMs: 1e6, nowTicks: () => ticks });
+  h.model = m;
+  const ids = [...m.allDataLinks.keys()];
+  let at = Date.UTC(2026, 10, 18, 9, 0, 0) + int(1e6);
+  const steps = [];
+  for (let k = 0, n = i === 0 ? 1300 : 40 + int(80); k < n; k++) {
+    at += 1 + int(200);
+    ticks = BigInt(at) * 10000n + TICKS_AT_EPOCH;
+    const entries = Array.from({ length: int(ids.length + 3) }, () => (rnd() < 0.1 ? 3000 + int(100) : pick(ids)));
+    const status = rnd() < 0.05 ? 1 : 0;
+    const payload = [status, ...le16(entries.length), ...entries.flatMap((id) => [...le16(id), ...f32(oddF32())])];
+    const frame = { type: 0x0f, cls: 0, cmd: 0, payload: Uint8Array.from(payload) };
+    h.visitReceived(frame);
+    steps.push({ at, frame: frameHex(frame), values: [...m.allDataLinks.values()].map((l) => hex(f32(l.value))) });
+  }
+  const histories = [...m.allDataLinks.values()].map((l) => ({
+    id: l.id,
+    at: l.historicalValues.map((v) => Number((v.ticks - TICKS_AT_EPOCH) / 10000n)),
+    values: l.historicalValues.map((v) => hex(f32(v.value))),
+  }));
+  liveCases.push({ xml: lastSimXml, steps, histories });
+}
+write('live.json', liveCases);
+
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
-console.log(`requests ${requests.length}, replies ${replies.length}, reporting ${reportingSeq.length}, recognition ${recognition.length}, device files ${deviceFiles.length} (${deviceFiles.filter((d) => d.error).length} rejected), calibration files ${calibrationFiles.length}, simulator sessions ${simSessions.length}, session cases ${sessionCases.length} → ${out}`);
+console.log(`requests ${requests.length}, replies ${replies.length}, reporting ${reportingSeq.length}, recognition ${recognition.length}, device files ${deviceFiles.length} (${deviceFiles.filter((d) => d.error).length} rejected), calibration files ${calibrationFiles.length}, simulator sessions ${simSessions.length}, session cases ${sessionCases.length}, live cases ${liveCases.length} → ${out}`);

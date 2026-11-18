@@ -13,6 +13,7 @@ import '../definition/definition.dart';
 import '../definition/device_file.dart';
 import '../link/channel.dart';
 import '../link/connection.dart';
+import '../live/live_store.dart';
 import '../wire/messages/drivers.dart';
 import '../wire/messages/reporting.dart';
 import '../wire/messages/sys.dart';
@@ -86,7 +87,12 @@ final class PasswordState {
 }
 
 class Session {
-  Session(this.connection, {required this.definitions, this.lifesignPeriod = const Duration(milliseconds: 1500)}) {
+  Session(
+    this.connection, {
+    required this.definitions,
+    this.lifesignPeriod = const Duration(milliseconds: 1500),
+    DateTime Function()? now,
+  }) : now = now ?? DateTime.now {
     _subs
       ..add(connection.states.listen(_onLink))
       ..add(connection.channel.received.listen(_onReceived));
@@ -96,6 +102,9 @@ class Session {
   final Connection connection;
   final DefinitionLookup definitions;
   final Duration lifesignPeriod;
+
+  /// Stamps live samples.
+  final DateTime Function() now;
 
   Channel get _channel => connection.channel;
 
@@ -114,6 +123,9 @@ class Session {
 
   /// The calibration as it was when the session last came online.
   Calibration? snapshot;
+
+  /// Live values for the current definition; null without one. Kept across a dropped link, as the calibration is.
+  LiveStore? live;
 
   /// Tables and drivers whose values from the ECU didn't fit the definition; they keep the definition's values.
   final unreadable = <int>{};
@@ -157,7 +169,12 @@ class Session {
 
   void _onReceived(Received r) {
     // Every identity reply starts the sequence, the one the connection's handshake gets included.
-    if (r.reply case final EcuInfoReply info when info.ok) unawaited(_identify(info));
+    switch (r.reply) {
+      case final EcuInfoReply info when info.ok:
+        unawaited(_identify(info));
+      case final ReportReply report:
+        live?.apply(report, now().millisecondsSinceEpoch.toDouble());
+    }
   }
 
   Future<void> _identify(EcuInfoReply r) async {
@@ -192,12 +209,14 @@ class Session {
     if (stale()) return;
     if (file == null) {
       calibration = null;
+      live = null;
       return _set(const SessionState(SessionPhase.loadingDefinition, problem: SessionProblem.noDefinition));
     }
     ecu = info;
     ecuUuid = r.uuid;
     unreadable.clear();
     final fresh = calibration = file.calibration.copy();
+    live = LiveStore(fresh.definition);
     if (r.passwordProtection) {
       _set(const SessionState(SessionPhase.identifying));
       final pw = await _channel.request(pwLockGetStateRequest());

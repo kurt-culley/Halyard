@@ -11,6 +11,7 @@ export 'src/definition/xml_convert.dart' show XmlValueError;
 export 'src/link/channel.dart';
 export 'src/link/connection.dart';
 export 'src/link/transport.dart';
+export 'src/live/live_store.dart';
 export 'src/session/session.dart';
 export 'src/sim/sim_datalog.dart';
 export 'src/sim/sim_ecu.dart';
