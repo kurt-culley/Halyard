@@ -51,6 +51,8 @@ regenerates every vector file byte for byte.
 | ECU simulator and its transport | `core/lib/src/sim/` |
 | Session read path: identify, definition, password state, hashes, reads, reporting and lifesign | `core/lib/src/session/session.dart` |
 | Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
+| Live data store | `core/lib/src/live/` |
+| Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
 
 ### What the second session changed and found
 
@@ -65,8 +67,8 @@ regenerates every vector file byte for byte.
   - `LinkDef.textValues` is null when the file has no list, so an empty list survives a save.
   - `parseTableBlob` and `parseDriverBlob` apply over the current values. A curve's wire form has no row axis, which
     zeroed it before.
-- **Simulator.** Ported except the fault log (class 9 gets no answer, fault-bit links read 0) and the CAN ids reserved
-  by the driver's own streams (2/3 answers with none). Both wait for `core/faults` and `core/can`. It has a password
+- **Simulator.** Ported except the CAN ids reserved by the driver's own streams (2/3 answers with none), which waits
+  for `core/can`. The fault log is off until `ecu.faults.seed()`, as in the TypeScript simulator. It has a password
   option the TypeScript simulator lacks; the generator patches the TypeScript simulator the same way. Table-data writes
   assume one float per offset; the wire form doesn't say, and the editors only send one.
 - **Session.** Reacts to every successful identity reply. On the same kind of ECU it confirms the overall hash or reads
@@ -95,6 +97,13 @@ regenerates every vector file byte for byte.
    `HALYARD_DEFS` check (`real_definitions_test.dart`) runs in Chrome too, and CI runs both. Locally as root, Chrome
    needs `--no-sandbox`: point `CHROME_EXECUTABLE` at a wrapper script that adds it.
 6. Then the Flutter app scaffold (`flutter create`), step 2 of the build order.
+
+## Questions for Kurt
+
+- **Fault diagnostic report files.** The original saves fault reports as JSON with `"format": "meite-fault-report"`
+  and refuses to open files without that marker (U13-J01 to J04). Writing it puts the vendor's name in a file users
+  share; changing it breaks compatibility both ways. Options: keep the marker; write our own marker and also accept
+  the original's when opening; or our own only. Not ported until decided. Everything else in the fault module is.
 
 ## Open questions for the real ECU (bench test)
 

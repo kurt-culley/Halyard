@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -601,6 +601,68 @@ for (let i = 0; i < 6; i++) {
   liveCases.push({ xml: lastSimXml, steps, histories });
 }
 write('live.json', liveCases);
+
+// ---------------------------------------------------------------- faults: catalogue, stamps, records, freeze frames
+// Pure functions of the TypeScript fault module over random inputs, and scripted fault-log sessions against its
+// simulator with a seeded log.
+{
+  const F = faults;
+  const codes = [...F.catalogueCodes().map((c) => c.code), 0, 100, 999, 65535, ...Array.from({ length: 20 }, () => int(65536))];
+  const lookups = codes.map((code) => { const c = F.lookup(code); return { code, index: c.index, name: c.name, kind: c.kind, severity: c.severity, known: c.isKnown }; });
+  const u32s = [0, 1, 59, 60, 1440, 0xffffffff, 2 ** 31, 4_000_000_000, 2_000_000_000, ...Array.from({ length: 40 }, () => int(2 ** 32))];
+  const stamps = u32s.map((x) => ({ x, hours: hex(f32(F.hours(x))), rtc: (() => { try { return F.rtcIso(x); } catch { return 'error'; } })() }));
+  const record = (type, body) => ({ ordinal: 0, magic: rnd() < 0.8 ? 0xfa17 : int(65536), type, catalogueVersion: 1, seq: 0, code: pick(codes), count: 0,
+    lifetime: 0, hoursX100: int(2 ** 32), rtc: 0, bodyLength: body.length, slotSize: 64, body: Uint8Array.from(body) });
+  const records = Array.from({ length: 80 }, () => {
+    const type = int(6);
+    const body = type === 2 && rnd() < 0.7 ? [...le32(int(2 ** 32)), ...le16(int(4)), ...bytes(24 * int(4) + int(30))] : bytes(int(12));
+    const r = record(type, body);
+    return { type, magic: r.magic, body: hex(body), valid: F.recordIsValid(r), oldMode: F.configOldMode(r), newMode: F.configNewMode(r),
+      checkpointHours: F.checkpointHoursX100(r), entries: F.checkpointEntries(r) };
+  });
+  const frames = Array.from({ length: 120 }, () => {
+    const layout = Array.from({ length: int(8) }, () => { const e = F.layoutEntry(int(3000), pick([0, 1, 2, 3, 4, 4, 4, 8])); if (rnd() < 0.4) e.type = int(6); return e; });
+    const body = Uint8Array.from(bytes(int(30)));
+    const values = F.decodeFrame(layout, body).map((v) => [v.linkId, hex(f32(v.value))]);
+    return { layout: layout.map((e) => [e.linkId, e.size, e.type]), body: hex(body), values };
+  });
+  const actives = Array.from({ length: 60 }, () => {
+    const v = () => pick([0, -1, NaN, Infinity, 2 ** 31, 2 ** 24 - 1, int(2 ** 24), Math.fround(int(2 ** 30)), 0.5, 1, 3.9]);
+    const a = v(), b = v(), c = v();
+    return { values: [a, b, c].map((x) => hex(f32(x))), active: [...F.activeIndexes(Math.fround(a), Math.fround(b), Math.fround(c))].sort((x, y) => x - y) };
+  });
+  write('faults.json', [{ lookups, stamps, records, frames, actives }]);
+}
+{
+  globalThis.setInterval = () => ({}); globalThis.clearInterval = () => {};
+  const sessions = [];
+  for (let i = 0; i < 8; i++) {
+    const base = simXml();
+    const have = new Set([...base.matchAll(/<DataLinkModel><id>(\d+)<\/id>/g)].map((x) => Number(x[1])));
+    const xml = base.replace('<links>', '<links>' + [1, 2, 6, 14, 18, 924, 2339, 2340, 2341].filter((id) => !have.has(id) && rnd() < 0.8)
+      .map((id) => `<DataLinkModel><id>${id}</id></DataLinkModel>`).join(''));
+    const m = DeviceDataModel.fromXml(xml, null);
+    const now = Date.UTC(2026, 10, 18, 12, 0, 0) + int(1e9);
+    const options = { uuid: 'SIM-F' + i, fwVersion: '1.0', reportMs: 100, engineStopped: rnd() < 0.5 };
+    const ecu = new SimEcu(m, { ...options, now: () => now });
+    const seeded = rnd() < 0.85;
+    if (seeded) ecu.seedFaults();
+    const replies = [];
+    ecu.reply = (cls, cmd, p) => replies.push(hex([0x0f, cls, cmd, ...p]));
+    const steps = [];
+    const send = (f) => { replies.length = 0; ecu.handle(f); steps.push({ send: frameHex(f), replies: [...replies] }); };
+    const report = () => { replies.length = 0; ecu.report(); steps.push({ op: 'report', replies: [...replies] }); };
+    send(faults.faultsGetInfoRequest()); send(faults.faultsGetFrameLayoutRequest(0, 200)); send(faults.faultsGetFrameLayoutRequest(3, 2));
+    send(faults.faultsGetSummaryRequest(0, 40)); send(faults.faultsGetSummaryRequest(2, 1));
+    for (let o = 0; o < 8; o++) send(faults.faultsGetOccurrenceRequest(o));
+    report(); send(faults.faultsClearRequest()); send(faults.faultsGetSummaryRequest(0, 40)); send(faults.faultsGetOccurrenceRequest(0));
+    send(faults.faultsEraseLogRequest()); send(faults.faultsGetInfoRequest()); report();
+    send({ type: 0, cls: 9, cmd: 7, payload: new Uint8Array(0) });
+    sessions.push({ xml, options, seeded, now, steps });
+  }
+  globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
+  write('sim_faults.json', sessions);
+}
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
 console.log(`requests ${requests.length}, replies ${replies.length}, reporting ${reportingSeq.length}, recognition ${recognition.length}, device files ${deviceFiles.length} (${deviceFiles.filter((d) => d.error).length} rejected), calibration files ${calibrationFiles.length}, simulator sessions ${simSessions.length}, session cases ${sessionCases.length}, live cases ${liveCases.length} → ${out}`);

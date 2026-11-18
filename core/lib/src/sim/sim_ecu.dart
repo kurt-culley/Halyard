@@ -2,9 +2,7 @@
 /// and the editors ask, applies writes to its copy and streams live reports while reporting is on. Ported from the
 /// TypeScript project's `ecu-sim.ts` (requirement W02 S01–S11); not something the original tool had.
 ///
-/// Not yet simulated, waiting for `faults/` and `can/`: the fault log (class 9 gets no answer, as when the
-/// TypeScript simulator's fault log is off, and the fault-bit links report 0) and the CAN ids reserved by the
-/// driver's own streams (2/3 answers with none).
+/// Not yet simulated, waiting for `can/`: the CAN ids reserved by the driver's own streams (2/3 answers with none).
 library;
 
 import 'dart:async';
@@ -17,6 +15,7 @@ import '../definition/definition.dart';
 import '../wire/bytes.dart';
 import '../wire/framing.dart';
 import 'sim_datalog.dart';
+import 'sim_faults.dart';
 import 'sim_trigger.dart';
 
 class SimEcu {
@@ -56,6 +55,7 @@ class SimEcu {
     }
     dataLog = SimDataLog(this);
     trigger = SimTrigger(this);
+    faults = SimFaultLog(this);
   }
 
   final Calibration calibration;
@@ -81,6 +81,9 @@ class SimEcu {
 
   late final SimDataLog dataLog;
   late final SimTrigger trigger;
+
+  /// Off until seeded.
+  late final SimFaultLog faults;
 
   /// Drive-by-wire duty from the last 8/0 request.
   double dbwDuty = 0;
@@ -115,7 +118,8 @@ class SimEcu {
       case 6:
         return dataLog.handle(f.cmd, p);
       case 9:
-        return; // no fault log yet
+        if (faults.supported) faults.handle(f.cmd, p); // no fault log: no answer
+        return;
       case 7:
         return trigger.handle(f.cmd, p);
       case 8 when f.cmd == 0 && p.length >= 5:
@@ -247,7 +251,7 @@ class SimEcu {
     if (id == 1018) return dataLog.samplesSoFar(ms).toDouble();
     if (id >= 2331 && id <= 2335) return _canLink(id, t);
     if (id == 1 && engineStopped) return 0;
-    if (id >= 2339 && id <= 2341) return 0; // fault bits: no fault log yet
+    if (id >= 2339 && id <= 2341) return faults.supported ? faults.activeBits(id - 2339).toDouble() : 0;
     if (_dbwValue(l.dataKey) case final v?) return v;
     final tv = l.textValues;
     if (tv != null && tv.isNotEmpty) return tv.keys.elementAt((t / 3 + id).floor() % tv.length);
