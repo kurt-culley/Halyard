@@ -2,12 +2,16 @@ import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../platform/serial.dart';
 import 'desktop_router.dart';
 
 /// The desktop and web composition root: one connection and session for the app's life, the definition library,
 /// and the link the connect feature chooses. Until the write gate exists the link only lets reads through.
 class DesktopRoot extends StatefulWidget {
-  const DesktopRoot({super.key});
+  const DesktopRoot({super.key, this.ports});
+
+  /// The serial ports; the platform's when null.
+  final PortFinder? ports;
 
   @override
   State<DesktopRoot> createState() => _DesktopRootState();
@@ -15,6 +19,7 @@ class DesktopRoot extends StatefulWidget {
 
 class _DesktopRootState extends State<DesktopRoot> {
   final _definitions = DefinitionLibrary();
+  late final _ports = widget.ports ?? platformPorts();
   final _link = ValueNotifier<TransportOpener?>(null);
   late final _connection = Connection((baud) {
     final open = _link.value;
@@ -36,6 +41,7 @@ class _DesktopRootState extends State<DesktopRoot> {
   Widget build(BuildContext context) => MultiProvider(
     providers: [
       Provider.value(value: _definitions),
+      Provider.value(value: _ports),
       ChangeNotifierProvider.value(value: _link),
       Provider.value(value: _connection),
       Provider.value(value: _session),

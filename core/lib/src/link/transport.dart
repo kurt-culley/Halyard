@@ -21,6 +21,31 @@ abstract interface class Transport {
 /// Opens a transport at a baud rate. The platform layer supplies one per port.
 typedef TransportOpener = Future<Transport> Function(int baudRate);
 
+/// A port the platform found, or one the user granted to the page.
+final class PortEntry {
+  const PortEntry(this.id, this.label, this.open, {this.vendorId, this.productId});
+
+  /// Stable for the app's run.
+  final String id;
+  final String label;
+  final TransportOpener open;
+
+  /// USB ids when the platform reports them; the bench report records them.
+  final int? vendorId, productId;
+}
+
+/// How the platform offers serial ports.
+abstract interface class PortFinder {
+  /// The ports available now (on the web, those the user has granted to this page).
+  Future<List<PortEntry>> list();
+
+  /// Whether [ask] shows a picker (the browser's), which must follow a click.
+  bool get canAsk;
+
+  /// Lets the user pick a port; null when dismissed or where there is no picker.
+  Future<PortEntry?> ask();
+}
+
 /// Timeouts and retry limits for one kind of link.
 final class LinkTiming {
   const LinkTiming({

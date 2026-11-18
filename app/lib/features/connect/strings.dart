@@ -5,6 +5,12 @@ abstract final class ConnectStrings {
   static const addDefinitions = 'Add definitions…';
   static const remove = 'Remove';
   static const noDefinitions = 'No definitions yet.';
+  static const serial = 'Serial port';
+  static const serialHint = 'Connect to the ECU over USB. Halyard only reads from it until editing arrives.';
+  static const noPorts = 'No ports found.';
+  static const choosePort = 'Choose a port…';
+  static const refresh = 'Refresh';
+  static const connect = 'Connect';
   static const demo = 'Demo';
   static const demoHint = 'Runs a simulated ECU built from one of your definitions, with live data.';
   static const startDemo = 'Start demo';

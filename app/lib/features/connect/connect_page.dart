@@ -15,6 +15,7 @@ class ConnectPage extends StatelessWidget {
   Widget build(BuildContext context) => ChangeNotifierProvider(
     create: (c) => ConnectController(
       c.read<DefinitionLibrary>(),
+      c.read<PortFinder>(),
       c.read<ValueNotifier<TransportOpener?>>(),
       c.read<Connection>(),
       c.read<Session>(),
@@ -78,6 +79,39 @@ class _ConnectViewState extends State<_ConnectView> {
             icon: const Icon(Icons.add),
             label: const Text(ConnectStrings.addDefinitions),
           ),
+        ),
+        const SizedBox(height: 32),
+        Text(ConnectStrings.serial, style: theme.textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(ConnectStrings.serialHint, style: theme.textTheme.bodyMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (c.ports.isEmpty)
+              const Text(ConnectStrings.noPorts)
+            else
+              DropdownButton<String>(
+                value: c.portId,
+                items: [for (final p in c.ports) DropdownMenuItem(value: p.id, child: Text(p.label))],
+                onChanged: c.isConnected ? null : c.choosePort,
+              ),
+            if (c.canAskForPort)
+              OutlinedButton(
+                onPressed: c.isConnected ? null : c.askForPort,
+                child: const Text(ConnectStrings.choosePort),
+              )
+            else
+              IconButton(
+                tooltip: ConnectStrings.refresh,
+                onPressed: c.isConnected ? null : c.refreshPorts,
+                icon: const Icon(Icons.refresh),
+              ),
+            if (!c.isConnected)
+              FilledButton(onPressed: c.port == null ? null : c.connectPort, child: const Text(ConnectStrings.connect)),
+          ],
         ),
         const SizedBox(height: 32),
         Text(ConnectStrings.demo, style: theme.textTheme.titleLarge),

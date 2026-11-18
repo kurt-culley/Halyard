@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/instruments/readout.dart';
+import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -14,9 +15,56 @@ String _definition() {
   return (cases.first as Map<String, dynamic>)['xml'] as String;
 }
 
+/// One port with a simulated ECU behind it.
+final class _FakePorts implements PortFinder {
+  _FakePorts(String xml)
+    : _ecu = SimEcu(readDeviceFile(xml).calibration, reportPeriod: const Duration(milliseconds: 100));
+  final SimEcu _ecu;
+
+  @override
+  bool get canAsk => false;
+  @override
+  Future<PortEntry?> ask() async => null;
+  @override
+  Future<List<PortEntry>> list() async => [
+    PortEntry('sim', 'Bench ECU (USB 1234:5678)', (b) => openSimulator(_ecu, b)),
+  ];
+}
+
+Future<void> _bigWindow(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(1400, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
+Future<void> _settle(WidgetTester tester, int steps) async {
+  for (var i = 0; i < steps; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 void main() {
+  testWidgets('a serial port connects through the read-only link', (tester) async {
+    final xml = _definition();
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(xml)));
+    await tester.pumpAndSettle();
+    expect(find.text('Bench ECU (USB 1234:5678)'), findsOneWidget);
+    tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', xml);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await _settle(tester, 20);
+    expect(find.textContaining('Online'), findsOneWidget);
+    await tester.tap(find.text('Disconnect'));
+    await _settle(tester, 10);
+    expect(find.text('Offline'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
   testWidgets('demo mode connects, shows live data and passes the bench test', (tester) async {
-    await tester.pumpWidget(const DesktopRoot());
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(_definition())));
     await tester.pumpAndSettle();
     expect(find.text('Offline'), findsOneWidget);
 

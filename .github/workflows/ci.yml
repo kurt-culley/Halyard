@@ -32,6 +32,9 @@ jobs:
       - name: App tests
         run: flutter test
         working-directory: app
+      - name: App tests (Chrome)
+        run: flutter test --platform chrome test/platform
+        working-directory: app
       - name: Import and folder rules
         run: dart run tool/check_imports.dart
       - name: Branding

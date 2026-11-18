@@ -36,6 +36,8 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 - The architecture must stay **slim and well considered**, down to file and folder structure.
 - Carried over from the earlier project: no VM in any capacity, no .NET oracle, don't hit the vendor's FTP server.
 - Kurt has only an Intel MacBook (8 GB). Sync work to `~/Desktop/rea-meite/halyard` on his Mac when linked.
+- **Deliver through the repo** (commit and push); don't send zips.
+- The open questions below don't block other work: carry on around them.
 
 ## State (18 Nov 2026, third session)
 
@@ -48,7 +50,7 @@ set); `node tool/export_vectors.mjs` regenerates every vector file byte for byte
 Step 2 (desktop read-only slice) has started: `app/` is a Flutter 3.50 package in the workspace (Material through
 `material_ui`, Provider, auto_route with a generated router, file_selector). The desktop root holds one connection and
 session behind the read-only policy, a definition library and the chosen link. The shell has a navigation rail and a
-status bar; the features are **connect** (add definition files, demo mode on the simulator), **live** (a readout per
+status bar; the features are **connect** (add definition files, a serial port, demo mode on the simulator), **live** (a readout per
 link) and **bench** (the checklist, with blocked writes, requests sent and a copyable report). A widget test runs the
 whole path against the simulator, and `flutter build web` builds. CI now installs Flutter 3.50.0 and runs both
 packages' analysis, formatting and tests plus the rule checks.
@@ -141,8 +143,11 @@ packages' analysis, formatting and tests plus the rule checks.
 5. **Chrome: done.** The vector loader reads files on the VM and fetches them in a browser; every test except the
    `HALYARD_DEFS` check (`real_definitions_test.dart`) runs in Chrome too, and CI runs both. Locally as root, Chrome
    needs `--no-sandbox`: point `CHROME_EXECUTABLE` at a wrapper script that adds it.
-6. **Step 2, desktop read-only slice: started** (see State). Still to come: serial transports (`app/platform`:
-   flutter_libserialport on desktop, Web Serial through `dart:js_interop`), the workspace (pages, tiles, split tree,
+6. **Step 2, desktop read-only slice: started** (see State). Serial transports are in `app/platform` behind the
+   core's `PortFinder`: flutter_libserialport on desktop (macOS lists `cu` devices only; the serial entitlement is
+   set) and Web Serial through a hand-written `dart:js_interop` binding, tested in Chrome against a fake port built
+   from real streams. Neither has met real hardware: the bench test is the first time. flutter_libserialport is MIT
+   and bundles libserialport (LGPL-3.0, linked dynamically). Still to come: the workspace (pages, tiles, split tree,
    command palette) in place of the plain rail, instruments beyond the readout, definition sources from a folder or
    URL with storage behind a core interface, and the `main_mobile.dart` root.
 
