@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -906,6 +906,69 @@ write('live.json', liveCases);
   }
   globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
   write('onboard_logs.json', [{ general, sessions }]);
+}
+
+// ---------------------------------------------------------------- DBC files and .NET number parsing
+{
+  const { parseDbc } = await src('dbc.ts');
+  const NF = await src('netfmt.ts');
+  const numTexts = ['0', '1', '-1', '+2', ' 3 ', '1.5', '.5', '5.', '1e3', '1E-3', '-1.5e+2', '1,000', '1,000.5', ',5', '1e', 'e5', '', ' ', 'abc', '1.2.3',
+    'Infinity', '-Infinity', 'NaN', ' NaN ', '1e400', '-1e400', '3.5e38', '3.4028236e38', '1e-50', '0x10', '00012', '1\0', '1\0\0', '\t7\n', '1 000',
+    ...Array.from({ length: 30 }, () => String((rnd() - 0.5) * 10 ** (int(20) - 10)))];
+  const tryIt = (f) => { try { const v = f(); return hex([...new Uint8Array(Float64Array.of(v).buffer)]); } catch { return 'error'; } };
+  const numbers = numTexts.map((t) => ({ t, d: tryIt(() => NF.parseDouble(t)), f: tryIt(() => NF.parseSingle(t)) }));
+  const ident = () => pick(['A', 'Eng', 'rpm_1', 'Throttle', 'X_y', 'Sig', 'S' + int(99), 'Ünïcode', 'Msg' + int(9)]);
+  const num = () => pick(['0', '1', '0.1', '-40', '1e-3', '3.5', '255', '-1.25E+2', '65535', rnd() < 0.05 ? '1..2' : '10']);
+  function dbcText() {
+    const L = ['VERSION ""', '', 'NS_ :', '\tNS_DESC_', '\tCM_', '\tBA_DEF_', '', 'BS_:', '', 'BU_: ECU DASH'];
+    const msgs = [];
+    for (let i = 0; i < 1 + int(5); i++) {
+      const id = rnd() < 0.2 ? (0x80000000 + int(0x1fffffff)) : int(0x800);
+      const name = ident() + i;
+      msgs.push({ id, name });
+      L.push(`BO_ ${id} ${name}: ${pick([8, 4, 0])} ${pick(['ECU', 'DASH', 'Vector__XXX'])}`);
+      if (rnd() < 0.1) L.push(`BO_ ${id} Dup${i}: 8 ECU`);
+      for (let k = 0; k < int(6); k++) {
+        const mux = pick(['', '', '', 'M', 'm0', 'm1', 'm12']);
+        L.push(` SG_ ${ident()}${k} ${mux} : ${int(70)}|${int(70)}@${pick(['0', '1'])}${pick(['+', '-'])} (${num()},${num()}) [${num()}|${num()}] "${pick(['', 'rpm', 'kPa', '°C', 'a b'])}" ${pick(['ECU', 'DASH,ECU', 'Vector__XXX', 'A B'])}`);
+      }
+      L.push('');
+    }
+    const any = () => pick(msgs);
+    if (rnd() < 0.7) L.push(`BA_DEF_ BO_ "GenMsgCycleTime" INT ${pick(['0 0', '0 1000', '-5 5'])};`);
+    if (rnd() < 0.5) L.push(`BA_DEF_ BO_ "GenMsgSendType" ENUM "Cyclic","Event", "IfActive";`);
+    if (rnd() < 0.5) L.push(`BA_DEF_ SG_ "GenSigStartValue" ${pick(['FLOAT 0 100', 'FLOAT 0 0', 'INT 0 10', 'HEX 0 255', 'STRING'])};`);
+    if (rnd() < 0.3) L.push('BA_DEF_ "BusType" STRING ;');
+    if (rnd() < 0.6) L.push(`BA_DEF_DEF_ "GenMsgCycleTime" ${pick(['100', '0', '"x"', '5000'])};`);
+    if (rnd() < 0.4) L.push(`BA_DEF_DEF_ "GenMsgSendType" ${pick(['"Event"', '1', '"Nope"', '7'])};`);
+    if (rnd() < 0.4) L.push(`BA_DEF_DEF_ "GenSigStartValue" ${pick(['5', '2.5', '"s"', '300'])};`);
+    for (let k = 0; k < int(4); k++) L.push(`BA_ "GenMsgCycleTime" BO_ ${any().id} ${pick(['20', '2000', '-1', '"t"'])};`);
+    if (rnd() < 0.4) L.push(`BA_ "GenMsgSendType" BO_ ${any().id} ${pick(['0', '2', '5', '"Event"'])};`);
+    if (rnd() < 0.4) L.push(`BA_ "GenSigStartValue" SG_ ${any().id} ${ident()}0 ${pick(['7', '1.5', '"q"'])};`);
+    if (rnd() < 0.3) L.push('BA_ "BusType" "CAN";');
+    if (rnd() < 0.5) L.push(`SIG_VALTYPE_ ${any().id} ${ident()}${int(3)} : ${int(4)};`);
+    if (rnd() < 0.4) L.push(`CM_ BO_ ${any().id} "A comment`, 'over two lines";');
+    if (rnd() < 0.3) L.push(`CM_ SG_ ${any().id} Sig1 "x";`);
+    if (rnd() < 0.3) L.push(`VAL_ ${any().id} Sig1 0 "Off" 1 "On" ;`);
+    if (rnd() < 0.2) L.push(`VAL_ ${pick(['99999999999', '12'])} Sig1 0 "Off" ;`);
+    if (rnd() < 0.2) L.push(`EV_ Env1: ${int(3)} [${num()}|${num()}] "u" ${num()} 1 DUMMY_NODE_VECTOR${pick(['', '800'])}${int(4)} ECU;`);
+    if (rnd() < 0.1) L.push('ENVVAR_DATA_ Env1: 4;');
+    if (rnd() < 0.1) L.push(`BO_ ${pick(['99999999999', '12'])} Big: 8 ECU`);
+    return L.join(pick(['\r\n', '\n', '\r\n'])) + (rnd() < 0.5 ? '\r\n' : '');
+  }
+  const f64 = (v) => hex([...new Uint8Array(Float64Array.of(v).buffer)]);
+  const propJson = (p) => ({ type: p.definition.dataType, integer: p.integer, hex: p.hex, float: p.float === null ? null : f64(p.float), string: p.string, enumValue: p.enumValue });
+  const props = (m) => [...m.entries()].map(([k, v]) => [k, propJson(v)]);
+  const files = Array.from({ length: 150 }, () => {
+    const text = dbcText();
+    try {
+      const d = parseDbc(text);
+      return { text, messages: d.messages.map((m) => ({ id: m.id, ext: m.isExtId, name: m.name, dlc: m.dlc, tx: m.transmitter, props: props(m.customProperties),
+        signals: m.signals.map((g) => ({ name: g.name, mux: g.multiplexing, start: g.startBit, len: g.length, order: g.byteOrder, type: g.valueType, isInt: g.isInteger,
+          factor: f64(g.factor), offset: f64(g.offset), min: f64(g.minimum), max: f64(g.maximum), unit: g.unit, rx: g.receiver, props: props(g.customProperties) })) })) };
+    } catch { return { text, error: true }; }
+  });
+  write('dbc.json', [{ numbers, files }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

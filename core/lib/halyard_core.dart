@@ -8,6 +8,7 @@ export 'src/calibration/calibration_file.dart';
 export 'src/calibration/calibration_import.dart';
 export 'src/can/can_bits.dart';
 export 'src/can/custom_can.dart';
+export 'src/can/dbc.dart';
 export 'src/definition/definition.dart';
 export 'src/definition/device_file.dart';
 export 'src/definition/xml_convert.dart' show XmlValueError;
