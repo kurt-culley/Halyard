@@ -3,6 +3,7 @@
 /// The only public entry point: the app imports this file and nothing under `src/`.
 library;
 
+export 'src/analysis/decimation.dart';
 export 'src/calibration/calibration.dart';
 export 'src/calibration/calibration_file.dart';
 export 'src/calibration/calibration_import.dart';

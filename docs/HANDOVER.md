@@ -59,6 +59,7 @@ regenerates every vector file byte for byte.
 | Onboard logging: support, configuration, start/stop, logs, erase, format, download, CSV; .NET number text and parsing for files | `core/lib/src/logs/` |
 | PC logging: CSV header and lines, a recorder sampling the live store at its rate | `core/lib/src/logs/pc_log.dart` |
 | Log review: CSV logs into sessions, statistics, events, difference sessions | `core/lib/src/logs/log_review.dart` |
+| Log-plot decimation (MinMaxLTTB; new in Halyard, so property tests rather than vectors) | `core/lib/src/analysis/decimation.dart` |
 
 ### What the second session changed and found
 
