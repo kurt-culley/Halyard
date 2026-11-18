@@ -1,10 +1,14 @@
-/// Editing table values (U28b): how many decimals a table shows, the formula box ("+20", "*1.6", "-15%", "=35") and
-/// blocks of cells pasted as text.
+/// Editing table values (U28b): how many decimals a table shows, the formula box ("+20", "*1.6", "-15%", "=35"),
+/// blocks of cells pasted as text, and the operations on values: interpolation, the live position and smoothing.
 library;
+
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import '../definition/definition.dart';
 import '../logs/number_text.dart';
 import '../wire/bytes.dart' show fround;
+import 'calibration.dart';
 
 /// Decimals shown: at least [min], at most [max], trailing zeros dropped in between.
 typedef DecimalsFormat = ({int min, int max});
@@ -135,3 +139,173 @@ List<String> _cells(String line) {
 }
 
 bool isSingleCell(List<List<String>>? block) => block != null && block.length == 1 && block[0].length == 1;
+
+// ---------------------------------------------------------------- operations on a table's values (U02-I01, P03,
+// I02 to I04, P01 to P05; U28b C05, C06). Cells are 0-based: row, then column. Arithmetic is in floats, as the
+// original's was.
+
+void _set(Float32List a, int i, double v) {
+  final old = a[i];
+  if (old == v || (old.isNaN && v.isNaN)) return;
+  a[i] = v;
+}
+
+/// The value at [x] of [span] between [a] and [b].
+double interpolateBetween(double a, double b, double x, double span) {
+  a = fround(a);
+  b = fround(b);
+  x = fround(x);
+  span = fround(span);
+  if (a < b) return fround(fround(fround(b - a) * fround(x / span)) + a);
+  return fround(fround(fround(fround(a - b) * fround(span - x)) / span) + b);
+}
+
+/// Spreads an axis evenly between entries [from] and [to].
+void interpolateAxis(Float32List axis, int from, int to) {
+  if (from >= to || to - from == 1) return;
+  final step = fround(fround(axis[to] - axis[from]) / fround((to - from).abs().toDouble()));
+  for (var i = from + 1; i < to; i++) {
+    _set(axis, i, fround(axis[i - 1] + step));
+  }
+}
+
+/// Fills a row between columns [from] and [to] by the column axis, leaving [tuned] cells alone.
+void interpolateRow(TableValues v, int row, int from, int to, {Set<int> tuned = const {}}) {
+  final cols = v.x.length;
+  final v1 = v.z[row * cols + from], v2 = v.z[row * cols + to];
+  final span = fround(v.x[to] - v.x[from]).abs();
+  if (span == 0) return;
+  for (var k = 0; k < to - from; k++) {
+    final i = row * cols + k + from;
+    if (tuned.contains(i)) continue;
+    _set(v.z, i, interpolateBetween(v1, v2, fround(v.x[k + from] - v.x[from]).abs(), span));
+  }
+}
+
+/// Fills a column between rows [from] and [to] by the row axis, leaving [tuned] cells alone.
+void interpolateColumn(TableValues v, int col, int from, int to, {Set<int> tuned = const {}}) {
+  final cols = v.x.length;
+  final v1 = v.z[from * cols + col], v2 = v.z[to * cols + col];
+  final span = fround(v.y[to] - v.y[from]).abs();
+  if (span == 0) return;
+  for (var k = 0; k < to - from; k++) {
+    final i = (from + k) * cols + col;
+    if (tuned.contains(i)) continue;
+    _set(v.z, i, interpolateBetween(v1, v2, fround(v.y[k + from] - v.y[from]).abs(), span));
+  }
+}
+
+/// Where live inputs fall in a map: fractional column and row, and the cell they round to.
+typedef TablePosition = ({double x, double y, int col, int row});
+
+/// The position of [in0] and [in1] on a map's axes (ascending or descending), clamped to the table.
+TablePosition tablePosition(TableValues v, double in0, double in1) {
+  double along(Float32List a, double value) =>
+      a.first < a.last ? _ascending(a, fround(value)) : _descending(a, fround(value));
+  final x = along(v.x, in0), y = along(v.y, in1);
+  return (x: x, y: y, col: tableCellIndex(x), row: tableCellIndex(y));
+}
+
+double _ascending(Float32List a, double v) {
+  final n = a.length;
+  var pos = fround(n - 1.0);
+  for (var i = 1; i < n; i++) {
+    if (v < a[i]) {
+      final d = fround(a[i] - a[i - 1]);
+      pos = fround(fround(i - 1.0) + fround(fround(v - a[i - 1]) / d));
+      break;
+    }
+  }
+  if (pos < 0) pos = 0;
+  if (pos >= n) pos = fround(n - 1.0);
+  return pos;
+}
+
+double _descending(Float32List a, double v) {
+  final n = a.length;
+  var pos = fround(n - 1.0);
+  for (var i = 1; i < n; i++) {
+    if (v > a[i]) {
+      final d = fround(a[i - 1] - a[i]);
+      pos = fround(fround(i - 1.0) + fround(fround(a[i - 1] - v) / d));
+      break;
+    }
+  }
+  if (pos < 0) pos = 0;
+  if (pos >= n) pos = fround(n - 1.0);
+  return pos;
+}
+
+/// `(int)Math.Round(pos, 1)`: half to even at one decimal, then truncated; out of range gives int.MinValue.
+int tableCellIndex(double pos) {
+  var v = fround(pos);
+  if (v.abs() < 1e16) {
+    final t = v * 10;
+    final fl = t.floorToDouble(), d = t - fl;
+    v = (d < 0.5 ? fl : (d > 0.5 ? fl + 1 : (fl % 2 == 0 ? fl : fl + 1))) / 10;
+  }
+  if (!v.isFinite || v >= 2147483648 || v < -2147483648) return -2147483648;
+  return v.truncate();
+}
+
+/// How far the position is from the centre of its cell, in hundredths of a cell along each axis, summed.
+double offsetFromCellCentre(TablePosition p) {
+  final a = fround(p.x - fround(p.col.toDouble())).abs(), b = fround(p.y - fround(p.row.toDouble())).abs();
+  return fround((a + b) * 100);
+}
+
+/// Moves each cell half way to the average of its 3×3 neighbourhood, all from the values before.
+void smoothCells(TableValues v, Iterable<(int, int)> cells) {
+  final cols = v.x.length, rows = v.y.length;
+  final before = Float32List.fromList(v.z);
+  for (final (y, x) in cells) {
+    if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+    var sum = 0.0;
+    var n = 0;
+    for (var yy = y - 1 < 0 ? 0 : y - 1; yy <= (y + 1 > rows - 1 ? rows - 1 : y + 1); yy++) {
+      for (var xx = x - 1 < 0 ? 0 : x - 1; xx <= (x + 1 > cols - 1 ? cols - 1 : x + 1); xx++) {
+        sum = fround(sum + before[yy * cols + xx]);
+        n++;
+      }
+    }
+    final i = y * cols + x;
+    final avg = fround(sum / n);
+    _set(v.z, i, fround(before[i] + fround(fround(avg - before[i]) * 0.5)));
+  }
+}
+
+/// The weight of a cell [radius] or less from a centre: 1 − distance / (radius + 1).
+double smoothWeight(int cx, int cy, int x, int y, int radius) {
+  final d = math.sqrt(((x - cx) * (x - cx) + (y - cy) * (y - cy)).toDouble());
+  return d <= radius ? fround(1 - d / (radius + 1)) : 0;
+}
+
+/// After [delta] moves the selected [cells], moves the cells around them by the same delta times their weight
+/// (summed over the selected cells they are near). The selected cells themselves are left alone.
+void dragAround(TableValues v, Iterable<(int, int)> cells, double delta, int radius) {
+  if (radius == 0) return;
+  final cols = v.x.length, rows = v.y.length;
+  final selected = <int>{};
+  final centres = <(int, int)>[];
+  for (final (y, x) in cells) {
+    if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+    selected.add(y * cols + x);
+    centres.add((x, y));
+  }
+  final add = <int, double>{};
+  for (final (x, y) in centres) {
+    for (var cy = y - radius < 0 ? 0 : y - radius; cy <= (y + radius > rows - 1 ? rows - 1 : y + radius); cy++) {
+      for (var cx = x - radius < 0 ? 0 : x - radius; cx <= (x + radius > cols - 1 ? cols - 1 : x + radius); cx++) {
+        final w = smoothWeight(x, y, cx, cy, radius);
+        if (!(w > 0)) continue;
+        final i = cy * cols + cx;
+        if (selected.contains(i)) continue;
+        final d = fround(delta * w);
+        add[i] = add.containsKey(i) ? fround(add[i]! + d) : d;
+      }
+    }
+  }
+  for (final e in add.entries) {
+    _set(v.z, e.key, fround(v.z[e.key] + e.value));
+  }
+}

@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values,table_operations}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -732,6 +732,59 @@ write('live.json', liveCases);
     cases.push({ xml, units: [units.analogReadings, units.analogTemperatureReadings, units.pressureReadings, units.temperatureValueReadings], checks, drivers });
   }
   write('driver_settings.json', cases);
+}
+
+// ---------------------------------------------------------------- table operations: interpolation, live position, smoothing
+{
+  const { TableModel } = await src('table.ts');
+  const { TableGridController, KEY } = await src('table-grid.ts');
+  const proto = TableGridController.prototype;
+  const cases = [];
+  for (let c = 0; c < 40; c++) {
+    const [rows, cols] = pick([[8, 8], [16, 16], [1, 16], [1, 2], [1, 32], [8, 8]]);
+    const t = new TableModel(); t.setCols(cols); t.setRows(rows); t.incrementValue = Math.fround(pick([0.1, 1, 0.5, 0.01]));
+    const axis = (n) => {
+      const start = int(1000), step = 1 + int(500); const desc = rnd() < 0.2;
+      const a = Array.from({ length: n }, (_, i) => Math.fround(start + (desc ? -1 : 1) * i * step * (rnd() < 0.1 ? 0 : 1) + (rnd() < 0.2 ? rnd() * step / 2 : 0)));
+      if (rnd() < 0.1) a[int(n)] = Math.fround(oddF32());
+      return a;
+    };
+    const x0 = axis(cols), y0 = rows > 1 ? axis(rows) : [0];
+    t.setTableElement(0, x0); t.setTableElement(1, y0);
+    t.setTableElement(2, Array.from({ length: rows * cols }, () => Math.fround(rnd() < 0.05 ? oddF32() : rnd() * 100)));
+    const snap = () => ({ x: hex(f32Bytes(t.input0.toArray())), y: hex(f32Bytes(t.input1.toArray())), z: hex(f32Bytes(t.output.toArray())) });
+    const start = snap();
+    const tuned = [];
+    const steps = [];
+    for (let k = 0; k < 25; k++) {
+      const r = rnd();
+      let step;
+      if (r < 0.1) { const i = int(rows * cols); t.tuned.set(i, true); tuned.push(i); step = { op: 'tune', cell: i }; }
+      else if (r < 0.25) { const a = int(cols), b = int(cols); const row = int(rows); t.interpolateRow(row, Math.min(a, b), Math.max(a, b)); step = { op: 'row', row, from: Math.min(a, b), to: Math.max(a, b) }; }
+      else if (r < 0.38 && rows > 1) { const a = int(rows), b = int(rows); const col = int(cols); t.interpolateCols(col, Math.min(a, b), Math.max(a, b)); step = { op: 'col', col, from: Math.min(a, b), to: Math.max(a, b) }; }
+      else if (r < 0.5) { const a = int(cols), b = int(cols); const ax = rows > 1 && rnd() < 0.5 ? 1 : 0; const n = ax ? rows : cols;
+        const s1 = int(n), e1 = int(n); TableModel.linearInterpolate(ax ? t.input1 : t.input0, s1, e1); step = { op: 'axis', axis: ax, from: s1, to: e1 }; void a; void b; }
+      else if (r < 0.7 && rows > 1) {
+        const v0 = Math.fround(rnd() < 0.2 ? oddF32() : x0[int(cols)] + (rnd() - 0.5) * 300), v1 = Math.fround(rnd() < 0.2 ? oddF32() : y0[int(rows)] + (rnd() - 0.5) * 300);
+        t.input0Link = { value: v0 }; t.input1Link = { value: v1 }; t.calculateCurrentPosition();
+        step = { op: 'position', in0: hex(f32(v0)), in1: hex(f32(v1)), pos: [hex(f32(t.currPositionX)), hex(f32(t.currPositionY)), t.currPositionXInt, t.currPositionYInt], offset: hex(f32(t.offsetFromCellCenter())) };
+      } else if (r < 0.85 && rows > 1) {
+        const cells = Array.from({ length: 1 + int(4) }, () => ({ row: int(rows + 1), col: int(cols + 1) }));
+        const ctx = { t, sel: { count: cells.length, selected: cells }, localAverage: proto.localAverage, smoothCells: proto.smoothCells };
+        proto.smoothSelected.call(ctx);
+        step = { op: 'smooth', cells: cells.map((q) => [q.row, q.col]) };
+      } else if (rows > 1) {
+        const cells = Array.from({ length: 1 + int(3) }, () => ({ row: int(rows + 2), col: int(cols + 2) }));
+        const radius = int(4); const key = pick(['Q', 'W', 'A', 'S']);
+        const ctx = { t, smoothRadius: radius, smoothCells: proto.smoothCells };
+        proto.dragNeighbours.call(ctx, cells, KEY[key]);
+        step = { op: 'drag', cells: cells.map((q) => [q.row, q.col]), radius, key };
+      } else continue;
+      steps.push({ ...step, after: snap() });
+    }
+    cases.push({ rows, cols, increment: hex(f32(t.incrementValue)), start, steps });
+  }
+  write('table_operations.json', cases);
 }
 
 // ---------------------------------------------------------------- playback: pausing, seeking back and going live again
