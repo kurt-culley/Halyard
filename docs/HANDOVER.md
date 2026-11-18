@@ -4,8 +4,8 @@ Read this first in a new session, then [ARCHITECTURE.md](ARCHITECTURE.md) and [b
 
 ## Getting the code into a new session
 
-If Kurt's Mac is linked, both projects are in `~/Desktop/rea-meite/` (`halyard/` and `me360/`). If not, he attaches
-`halyard.zip` and `me360-reference.zip`: unzip both into the same folder so `halyard/` and `me360/` are siblings. The
+Halyard lives in the private GitHub repo `kurt-culley/halyard`; clone it so `halyard/` and `me360/` are siblings. If
+Kurt's Mac is linked, both projects are also in `~/Desktop/rea-meite/`. Otherwise he attaches `me360-reference.zip`: unzip both into the same folder so `halyard/` and `me360/` are siblings. The
 reference zip leaves out `me360/defs/` (vendor files); the core tests don't need them.
 
 A cloud session needs `storage.googleapis.com` (the Dart SDK zip from `dart-archive/channels/stable/release/latest/`)
@@ -81,10 +81,9 @@ regenerates every vector file byte for byte.
 
 ## Next
 
-1. **Repo and CI.** Kurt chose a private GitHub repo, `kurt-culley/halyard`, with GitHub Actions
-   (`.github/workflows/ci.yml` runs analyze, format, tests and both rule checks). A cloud session can't create
-   repositories, so Kurt creates the empty repo; then `add_repo` with push access and push `main`. The first commit
-   exists locally in the zip's `.git`.
+1. **Repo and CI: done.** Private repo `kurt-culley/halyard` on GitHub; GitHub Actions (`.github/workflows/ci.yml`)
+   runs analyze, format, tests and both rule checks on every push and pull request, green from the first push. A new
+   cloud session attaches it with `add_repo` (push access) and clones it; it no longer needs the zip.
 2. **Sending a calibration**: apply a `.mecal` to the ECU's definition (`calibration.ts` F01, `load-calibration.ts`)
    and send it (`message-handler.ts` K01–K04). This is the first write path, so it goes with the write gate.
 3. **Live data**: report decoding into the ring-buffer store in `core/live`, fed from the session's channel.
