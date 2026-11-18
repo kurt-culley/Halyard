@@ -23,6 +23,7 @@ export 'src/link/channel.dart';
 export 'src/link/connection.dart';
 export 'src/link/transport.dart';
 export 'src/live/live_store.dart';
+export 'src/logs/live_recording.dart';
 export 'src/logs/log_review.dart';
 export 'src/logs/number_text.dart';
 export 'src/logs/onboard_logs.dart';

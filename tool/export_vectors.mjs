@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -1200,6 +1200,61 @@ write('live.json', liveCases);
     return { id, search: q, items: P.filterPresets(lib.getPresets(id), q).map((i) => [i.source, i.name, i.details]) };
   });
   write('presets.json', [{ files, fromTables, searches }]);
+}
+
+// ---------------------------------------------------------------- live-data recordings (rolling CSV)
+{
+  const R = await src('rolling-csv.ts');
+  const { formatGeneral } = await src('netfmt.ts');
+  // the writer: a few headers, lines through a folder that keeps every file
+  const writers = Array.from({ length: 12 }, () => {
+    const maxLines = 1 + int(6);
+    const w = new R.RollingCSVWriter(maxLines);
+    const files = [];
+    w.openFolder = () => ({ createFile: (name) => { const f = { name, text: '' }; files.push(f); return { write: (t) => { f.text += t; }, flush() {}, close() {} }; } });
+    let clock = Date.UTC(2026, int(12), 1 + int(28), int(24), int(60), int(60));
+    w.now = () => new Date(clock);
+    const start = clock;
+    const steps = [];
+    const headers = rnd() < 0.1 ? [] : Array.from({ length: 1 + int(4) }, () => (rnd() < 0.1 ? null : ascii(1 + int(6)).replace(/,/g, ';')));
+    w.headers = headers;
+    for (let k = 0; k < 30; k++) {
+      const r = rnd();
+      if (r < 0.06) { const folder = pick([null, '', 'C:\\logs']); w.save(folder); steps.push(['save', folder]); }
+      else if (r < 0.1) { w.disposeFile(); steps.push(['dispose']); }
+      else if (r < 0.15) { clock += 1000 * int(5); steps.push(['tick', clock]); }
+      else { const cols = Array.from({ length: int(4) }, () => (rnd() < 0.1 ? null : formatGeneral(Math.fround((rnd() - 0.5) * 1000)))); w.addLine(cols); steps.push(['line', cols]); }
+    }
+    return { maxLines, start, headers, steps, files };
+  });
+  // the reader
+  const reads = Array.from({ length: 60 }, () => {
+    const heads = Array.from({ length: 1 + int(4) }, () => pick([' a', 'b ', 'Time', 'RPM', 'MAP', 'x']));
+    const lines = [heads.join(',')];
+    for (let k = 0; k < int(12); k++) {
+      const n = rnd() < 0.9 ? heads.length : int(heads.length + 2);
+      const cols = [formatGeneral(rnd() < 0.5 ? 63900000000 + rnd() * 1e6 : rnd() * 100, false), ...Array.from({ length: n - 1 }, () => formatGeneral(Math.fround((rnd() - 0.5) * 1e4)))];
+      if (rnd() < 0.03) cols[int(cols.length)] = pick(['', 'abc', '1e400', 'NaN', '-0']);
+      lines.push(cols.join(','));
+    }
+    let text = lines.join(pick(['\r\n', '\n', '\r']));
+    if (rnd() < 0.3) text += '\r\n';
+    if (rnd() < 0.05) text = '';
+    const maxLines = 1 + int(10);
+    const w = new R.RollingCSVWriter(maxLines);
+    let error = false; w.onError = () => { error = true; };
+    let map;
+    try { map = [...w.load(null, { exists: true, readText: () => text })].map(([k, v]) => [k, v.map((x) => [String(x.ticks), hex(f32(x.value))])]); }
+    catch { return { text, maxLines, throws: true }; }
+    return { text, maxLines, map, error };
+  });
+  // the time column: local DateTime ticks as seconds (TZ is UTC here)
+  const times = Array.from({ length: 30 }, () => {
+    const ms = Date.UTC(2000 + int(40), int(12), 1 + int(28), int(24), int(60), int(60), int(1000));
+    const ticks = BigInt(ms) * 10000n + 621355968000000000n;
+    return [ms, formatGeneral(Number(ticks) * 1e-7, false)];
+  });
+  write('live_recordings.json', [{ writers, reads, times }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
