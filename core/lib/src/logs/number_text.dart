@@ -15,6 +15,39 @@ String formatFloatR(double v) {
   return back == Float32List.fromList([v])[0] ? g7 : _formatG(v, 9);
 }
 
+/// A float with `ToString("0.<min zeros><max − min #>")`: 7 significant digits, rounded half away from zero to [max]
+/// decimals, trailing zeros dropped down to [min]; a result of zero has no sign.
+String formatDecimals(double v, int min, int max) {
+  if (v.isNaN) return 'NaN';
+  if (v == double.infinity) return 'Infinity';
+  if (v == double.negativeInfinity) return '-Infinity';
+  final parts = v.abs().toStringAsExponential(6).split('e');
+  final digits = parts[0].replaceAll('.', '');
+  final e = int.parse(parts[1]);
+  final String intPart, frac;
+  if (e >= 6) {
+    intPart = digits + '0' * (e - 6);
+    frac = '';
+  } else if (e >= 0) {
+    intPart = digits.substring(0, e + 1);
+    frac = digits.substring(e + 1);
+  } else {
+    intPart = '0';
+    frac = '0' * (-e - 1) + digits;
+  }
+  final keep = (frac + '0' * max).substring(0, max);
+  var n = BigInt.parse(intPart + keep);
+  if (frac.length > max && frac.codeUnitAt(max) >= 0x35) n += BigInt.one;
+  final s = n.toString().padLeft(max + 1, '0');
+  final ip = max > 0 ? s.substring(0, s.length - max) : s;
+  var fp = max > 0 ? s.substring(s.length - max) : '';
+  while (fp.length > min && fp.endsWith('0')) {
+    fp = fp.substring(0, fp.length - 1);
+  }
+  final out = fp.isNotEmpty ? '$ip.$fp' : ip;
+  return v < 0 && n != BigInt.zero ? '-$out' : out;
+}
+
 String _formatG(double v, int p) {
   if (v.isNaN) return 'NaN';
   if (v == double.infinity) return 'Infinity';

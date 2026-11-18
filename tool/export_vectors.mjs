@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings,playback}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback,table_editing}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -1305,6 +1305,51 @@ write('playback.json', playbackCases);
     return [ms, formatGeneral(Number(ticks) * 1e-7, false)];
   });
   write('live_recordings.json', [{ writers, reads, times }]);
+}
+
+// ---------------------------------------------------------------- table editing: number format, decimals, formulas, clipboard
+{
+  const T = await src('table-format.ts');
+  const val = () => Math.fround(rnd() < 0.1 ? pick([0, -0, 0.5, -0.5, 0.0005, 1.0005, 2.5, 999999.5, 1e10, 1e-10, NaN, Infinity, -Infinity, 0.125, 1.5e-5])
+    : (rnd() - 0.5) * 10 ** (int(12) - 5));
+  const formats = Array.from({ length: 600 }, () => {
+    const v = val(); const max = int(9); const min = int(max + 1);
+    return [hex(f32(v)), min, max, T.formatFixedRange(v, min, max)];
+  });
+  const incs = Array.from({ length: 80 }, () => {
+    const v = rnd() < 0.5 ? Math.fround(pick([0.1, 0.01, 0.001, 0.0001, 0.00001, 1, 0.5, 0.25, 0.05, 2, 0, -0.1, NaN, Infinity, 1e-9, 0.123456789]))
+      : Math.fround(rnd() * 10 ** -int(6));
+    return [hex(f32(v)), T.getDecimalPlaces(v)];
+  });
+  const words = ['VE', 'VE1', 'Fuel VE', 'Main VE table', 'Lambda target', 'lambda_target', 'λ', 'Target AFR', 'AFR trim', 'AFR Deadband', 'Ignition',
+    'Boost', 'xVEx', 'Λ-Lambda', 'A.F.R', null, '', 'Inj Comp', 'IAT trim'];
+  const tables = Array.from({ length: 150 }, () => {
+    const t = { id: int(65536), name: pick(words), outputName: rnd() < 0.5 ? pick(words) : null, incrementValue: Math.fround(pick([0.1, 0.01, 1, 0.001, 0.5, 0, 0.00001, 0.25])),
+      category: rnd() < 0.3 ? pick(['Fuel', 'Lambda control', 'Ignition', null]) : null,
+      outputLink: rnd() < 0.6 ? { name: pick(words), measureUnit: pick([null, 'AFR', 'afr', 'kPa', 'Lambda', '']), measurementUnits: [] } : null };
+    const decimals = rnd() < 0.2 ? int(4) : null;
+    const fmt = T.outputFormat(t, { get: () => decimals });
+    return { table: [t.id, t.name, t.outputName, hex(f32(t.incrementValue)), t.category, t.outputLink && [t.outputLink.name, t.outputLink.measureUnit]], decimals,
+      format: [fmt.min, fmt.max], lambda: T.isLambdaRelated(t), ve: T.isVeTable(t) };
+  });
+  const ops = ['+', '-', '*', '/', '=', '', ' ', 'x'];
+  const numbers = ['20', '1.6', '3', '10%', '15%', '-5', '1,000', '1,000.5', '', 'abc', '1e3', '1e40', 'NaN', 'Infinity', '.5', '5.', '%', '10%%', ' 2 ', '0', '1e-50', '+3'];
+  const formulas = Array.from({ length: 300 }, () => {
+    const text = (rnd() < 0.2 ? ' ' : '') + pick(ops) + pick(numbers) + (rnd() < 0.1 ? ' ' : '');
+    const m = new T.StringMaths(text);
+    const inputs = Array.from({ length: 4 }, val);
+    return { text, valid: m.valid, operation: m.operation, operand: hex(f32(m.operand)), applied: inputs.map((x) => [hex(f32(x)), hex(f32(m.apply(x)))]) };
+  });
+  const cells = ['1', '2.5', '-3', '', ' ', 'abc', '4\t', '\t5'];
+  const clipboard = Array.from({ length: 120 }, () => {
+    const rows = Array.from({ length: int(5) }, () => Array.from({ length: int(5) }, () => pick(cells)).join(pick(['\t', ' ', '  ', '\t'])));
+    let text = rows.join(pick(['\r\n', '\n', '\r']));
+    if (rnd() < 0.3) text += pick(['\r\n', '\n\n', '  \n ']);
+    if (rnd() < 0.05) text = null;
+    const b = T.parseClipboardBlock(text);
+    return { text, block: b, single: T.isSingleValue(b) };
+  });
+  write('table_editing.json', [{ formats, incs, tables, formulas, clipboard }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
