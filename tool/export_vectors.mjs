@@ -3,7 +3,8 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
+// tuning_assistant}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -1042,6 +1043,46 @@ write('live.json', liveCases);
       diff: { channels: diff.channels.map((c) => c.name), times: diff.sampleSet.timesSeconds.map(f64n), values: diff.sampleSet.channelValues.map((v) => v.map(f64n)), warnings: diff.warnings } });
   }
   write('log_review.json', cases);
+}
+
+// ---------------------------------------------------------------- tuning assistant: analysis of samples against VE and target
+{
+  const TA = await src('tuning-assistant.ts');
+  const f64n = (v) => (Number.isNaN(v) ? 'NaN' : hex([...new Uint8Array(Float64Array.of(v).buffer)]));
+  const table = (rows, cols, base, spread, desc) => {
+    const ax = (n, top) => { const a = Array.from({ length: n }, (_, i) => Math.fround(i * top / Math.max(1, n - 1))); return desc && rnd() < 0.3 ? a.reverse() : a; };
+    const x = ax(cols, 7000), y = ax(rows, 200);
+    const out = Array.from({ length: rows * cols }, () => Math.fround(base + (rnd() - 0.5) * spread));
+    return { rows, cols, x, y, out, ta: { rows, cols, input0: { toArray: () => x, get: (i) => x[i] }, input1: { toArray: () => y, get: (i) => y[i] },
+      output: { get: (i) => out[i], set() {} }, getOutputValue: (r, c) => out[r * cols + c] } };
+  };
+  const cases = Array.from({ length: 50 }, () => {
+    const ve = table(pick([8, 16]), pick([8, 16]), 60, 40, true);
+    const target = rnd() < 0.3 ? table(1, 16, 13.5, 3, false) : table(pick([8, 16]), pick([8, 16]), 13.5, 3, true);
+    const mode = int(2);
+    const samples = Array.from({ length: int(400) }, () => ({ rpm: rnd() * 8000 - 500, load: rnd() * 220 - 10,
+      measured: mode === 1 ? 0.7 + rnd() * 0.6 + (rnd() < 0.05 ? 2 : 0) : 10 + rnd() * 8 + (rnd() < 0.05 ? 20 : 0) }));
+    const settings = { ...TA.defaultSettings(), veTable: ve.ta, targetAfrTable: target.ta, measurementMode: mode, stoichAfr: pick([14.7, 14.7, 9.8, 4]),
+      minimumHits: pick([1, 4, 10]), confidenceThreshold: pick([0.2, 0.55, 0.9]), stabilityTolerancePercent: pick([5, 20, 60]), maxCorrectionPercent: pick([0.1, 5, 10, 80]),
+      externalSamples: samples, externalSampleSourceName: 'x' };
+    const r = TA.analyse(settings);
+    return {
+      ve: { rows: ve.rows, cols: ve.cols, x: ve.x.map(f64n), y: ve.y.map(f64n), out: ve.out.map(f64n) },
+      target: { rows: target.rows, cols: target.cols, x: target.x.map(f64n), y: target.y.map(f64n), out: target.out.map(f64n) },
+      mode, stoich: settings.stoichAfr, minHits: settings.minimumHits, threshold: settings.confidenceThreshold, stability: settings.stabilityTolerancePercent,
+      maxCorrection: settings.maxCorrectionPercent, samples: samples.map((x) => [x.rpm, x.load, x.measured].map(f64n)),
+      considered: r.samplesConsidered, used: r.samplesUsed, rejected: r.samplesRejected, message: r.message,
+      suggestions: (r.suggestions ?? []).flat().map((g) => [g.hitCount, f64n(g.weightedHitCount), f64n(g.averageFactor), f64n(g.standardDeviation), f64n(g.stabilityScore),
+        f64n(g.confidence), f64n(g.suggestedValue), f64n(g.unclampedSuggestedValue), f64n(g.percentChange), f64n(g.averageMeasured), f64n(g.averageTarget), g.eligible, g.note]),
+    };
+  });
+  const columns = Array.from({ length: 30 }, () => {
+    const headers = Array.from({ length: 1 + int(6) }, () => pick(['Time', 'RPM', 'Engine Speed (rpm)', 'Primary Load (%)', 'Load', 'MAP', 'Lambda Curr AFR 1', 'AFR', 'lambda', 'ÄFR 2', '']));
+    const log = new TA.TuningCsvLog('x.csv', headers, []);
+    const cand = Array.from({ length: 1 + int(3) }, () => pick(['RPM', 'rpm', 'Load', 'Primary Load', 'AFR', 'Lambda', null, ' ', 'Speed']));
+    return { headers, candidates: cand, index: TA.findCsvColumn(log, cand) };
+  });
+  write('tuning_assistant.json', [{ cases, columns }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

@@ -4,6 +4,7 @@
 library;
 
 export 'src/analysis/decimation.dart';
+export 'src/analysis/tuning_assistant.dart';
 export 'src/calibration/calibration.dart';
 export 'src/calibration/calibration_file.dart';
 export 'src/calibration/calibration_import.dart';

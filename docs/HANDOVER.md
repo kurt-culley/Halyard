@@ -60,6 +60,7 @@ regenerates every vector file byte for byte.
 | PC logging: CSV header and lines, a recorder sampling the live store at its rate | `core/lib/src/logs/pc_log.dart` |
 | Log review: CSV logs into sessions, statistics, events, difference sessions | `core/lib/src/logs/log_review.dart` |
 | Log-plot decimation (MinMaxLTTB; new in Halyard, so property tests rather than vectors) | `core/lib/src/analysis/decimation.dart` |
+| Fuel tuning assistant: analysis and suggestions from live or CSV samples (applying them waits for the write gate) | `core/lib/src/analysis/tuning_assistant.dart` |
 
 ### What the second session changed and found
 
