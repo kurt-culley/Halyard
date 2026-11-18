@@ -5,12 +5,21 @@ library;
 import 'dart:typed_data';
 
 /// `ToString()` of a float ([isFloat]) or a double.
-String formatGeneral(double v, {bool isFloat = true}) {
+String formatGeneral(double v, {bool isFloat = true}) => _formatG(v, isFloat ? 7 : 15);
+
+/// `float.ToString("R")` on .NET Framework: "G7" when that reads back to the same float, otherwise "G9".
+String formatFloatR(double v) {
+  final g7 = _formatG(v, 7);
+  if (!v.isFinite) return g7;
+  final back = Float32List.fromList([double.parse(g7.replaceFirst('E', 'e'))])[0];
+  return back == Float32List.fromList([v])[0] ? g7 : _formatG(v, 9);
+}
+
+String _formatG(double v, int p) {
   if (v.isNaN) return 'NaN';
   if (v == double.infinity) return 'Infinity';
   if (v == double.negativeInfinity) return '-Infinity';
   if (v == 0) return '0';
-  final p = isFloat ? 7 : 15;
   final parts = v.abs().toStringAsExponential(p - 1).split('e');
   final d = parts[0].replaceAll('.', '').replaceFirst(RegExp(r'0+$'), '');
   final exp = int.parse(parts[1]);

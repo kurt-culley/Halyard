@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -1139,6 +1139,67 @@ write('live.json', liveCases);
     files.push({ file: hex(bin), read });
   }
   write('firmware.json', [{ hexes, files }]);
+}
+
+// ---------------------------------------------------------------- table presets (.mepres)
+{
+  const P = await src('presets.ts');
+  const fl = () => Math.fround((rnd() - 0.5) * 10 ** int(5));
+  const arr = (n) => {
+    const a = Array.from({ length: n }, fl);
+    if (n && rnd() < 0.15) a[int(n)] = Math.fround(pick([0, -0, 1e-45, 3.4e38, NaN, Infinity]));
+    return a;
+  };
+  const sizes = [[2, 0], [16, 0], [32, 0], [8, 8], [16, 16], [32, 32]];
+  const name = () => (rnd() < 0.1 ? null : rnd() < 0.1 ? '' : anyText(int(20)).replace(/\u0000/g, '') + (rnd() < 0.1 ? '\t<&>\r\n' : ''));
+  const table = () => {
+    let [n0, n1] = pick(sizes);
+    if (rnd() < 0.05) n0 = int(40);
+    return { name: name(), description: name(), compatibleIds: rnd() < 0.1 ? null : Array.from({ length: int(4) }, () => int(65536)),
+      input0: rnd() < 0.03 ? null : arr(n0), input1: n1 === 0 && rnd() < 0.5 ? null : arr(n1), output: rnd() < 0.05 ? null : arr(n0 * Math.max(n1, 1)) };
+  };
+  const driver = () => ({ name: name(), description: name(), compatibleIds: rnd() < 0.1 ? null : Array.from({ length: int(3) }, () => int(65536)) });
+  const f32hex = (a) => hex(a.flatMap(f32));
+  const presets = (p) => ({
+    tables: p.tables.map((t) => [t.name, t.description, t.compatibleIds, f32hex(t.input0), f32hex(t.input1), f32hex(t.output)]),
+    drivers: p.drivers.map((d) => [d.name, d.description, d.compatibleIds]),
+  });
+  const files = Array.from({ length: 120 }, () => {
+    const x = { tables: rnd() < 0.1 ? null : Array.from({ length: int(4) }, table), drivers: rnd() < 0.3 ? null : Array.from({ length: int(3) }, driver) };
+    let text = P.serializePresets(x);
+    const m = rnd();
+    if (m < 0.05) text = text.replace('<Presets>', '<Presets xmlns="urn:x">');
+    else if (m < 0.08) text = text.replace(/Presets>/g, 'Preset>');
+    else if (m < 0.12) text = text.replace('<Presets>', '<?xml version="1.0" encoding="utf-8"?>\n<Presets xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">');
+    else if (m < 0.16) text = text.replace(/<\/TablePreset>/, '<Extra>1</Extra></TablePreset>');
+    else if (m < 0.18) text = text.slice(0, int(text.length));
+    else if (m < 0.22) text = text.replace(/\r\n */g, '');
+    let read;
+    try { const p = P.readPresetsFile(P.source('C:\\presets\\' + ascii(5) + '.mepres'), text); read = { ok: presets(p), saved: P.serializePresets(P.presetsToXml(p)) }; }
+    catch { read = { error: true }; }
+    return { text, read };
+  });
+  const fromTables = Array.from({ length: 40 }, () => {
+    let [n0, n1] = pick([...sizes, [16, 1], [2, 1], [32, 1], [8, 1]]);
+    if (rnd() < 0.1) n0 = 1 + int(20);
+    const t = { id: int(65536), name: name(), x: arr(n0), y: arr(n1), z: arr(n0 * Math.max(n1, 1)) };
+    let r;
+    try {
+      const p = P.presetFromTable({ id: t.id, name: t.name, input0: { toArray: () => t.x }, input1: { toArray: () => t.y }, output: { toArray: () => t.z } });
+      r = { ok: P.savePresetText('C:\\x.mepres', { id: t.id, name: t.name, input0: { toArray: () => t.x }, input1: { toArray: () => t.y }, output: { toArray: () => t.z } }), name: p.name };
+    } catch { r = { error: true }; }
+    return { id: t.id, name: t.name, x: f32hex(t.x), y: f32hex(t.y), z: f32hex(t.z), ...r };
+  });
+  // the import list's search over one library
+  const lib = new P.PresetsModel();
+  for (const f of files.slice(0, 40)) if (!f.read.error) lib.addPresets(P.readPresetsFile(P.source('C:\\p\\' + f.text.length + '.mepres'), f.text));
+  const ids = [...lib.compatible.keys()].slice(0, 30);
+  const searches = ids.map((id) => {
+    const own = lib.getPresets(id).map(([, t]) => t.name ?? '').filter((n) => n.length > 2);
+    const q = own.length && rnd() < 0.5 ? (([n]) => n.slice(1, 3).toUpperCase())([pick(own)]) : pick([null, '', 'a', 'E', '1', ' ', 'zz', '<', '5']);
+    return { id, search: q, items: P.filterPresets(lib.getPresets(id), q).map((i) => [i.source, i.name, i.details]) };
+  });
+  write('presets.json', [{ files, fromTables, searches }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
