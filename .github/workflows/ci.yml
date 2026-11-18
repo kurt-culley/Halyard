@@ -5,28 +5,33 @@ on:
   pull_request:
 
 jobs:
-  core:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: 3.14.1
+          flutter-version: 3.50.0
+          channel: stable
       - name: Dependencies
-        run: dart pub get
-        working-directory: core
-      - name: Analyze
+        run: flutter pub get
+      - name: Analyze core
         run: dart analyze --fatal-infos
         working-directory: core
+      - name: Analyze app
+        run: dart analyze --fatal-infos
+        working-directory: app
       - name: Format
-        run: dart format --set-exit-if-changed .
-        working-directory: core
-      - name: Tests (VM)
+        run: dart format --set-exit-if-changed core app/lib app/test
+      - name: Core tests (VM)
         run: dart test
         working-directory: core
-      - name: Tests (Chrome)
+      - name: Core tests (Chrome)
         run: dart test -p chrome
         working-directory: core
+      - name: App tests
+        run: flutter test
+        working-directory: app
       - name: Import and folder rules
         run: dart run tool/check_imports.dart
       - name: Branding

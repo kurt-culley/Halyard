@@ -72,6 +72,9 @@ class Channel {
   /// A frame the policy refused.
   void Function(Frame f)? onBlocked;
 
+  /// A frame written to the transport.
+  void Function(Frame f)? onSent;
+
   /// Every decoded frame, good checksum or not (the connection treats any frame as a sign of life).
   void Function(Frame f)? onAnyFrame;
 
@@ -161,6 +164,7 @@ class Channel {
     try {
       await t.write(encodeFrame(f));
       sentCount++;
+      onSent?.call(f);
     } catch (_) {
       if (identical(_waiter, waiter)) _waiter = null;
       _lose();

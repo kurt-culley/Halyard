@@ -4,3 +4,4 @@ environment:
   sdk: ^3.7.0
 workspace:
   - core
+  - app

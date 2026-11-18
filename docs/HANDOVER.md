@@ -8,8 +8,10 @@ Halyard lives in the private GitHub repo `kurt-culley/halyard`; clone it so `hal
 Kurt's Mac is linked, both projects are also in `~/Desktop/rea-meite/`. Otherwise he attaches `me360-reference.zip`;
 unzip it next to the clone. The reference zip leaves out `me360/defs/` (vendor files); the core tests don't need them.
 
-A cloud session needs `storage.googleapis.com` (the Dart SDK zip from `dart-archive/channels/stable/release/latest/`)
-and `pub.dev` allowed in the network settings. Node 22.18 or later runs the vector generator.
+A cloud session needs `storage.googleapis.com` (the Flutter SDK from `flutter_infra_release/releases/stable/linux/`,
+3.50.0 with Dart 3.14.0) and `pub.dev` allowed in the network settings. Node 22.18 or later runs the vector generator.
+Since the app joined the workspace, `pub get` needs the Flutter SDK: run `flutter pub get` at the root, then `dart`
+from Flutter's `bin` for the core. As root, add `/opt/flutter` to git's `safe.directory`.
 
 ## What this is
 
@@ -39,10 +41,17 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 
 The core covers every decision-free module of the reference engine that the build order needs before the app: reading,
 the session, live data and playback, logs, faults, CAN, import, presets, settings pages, table editing, the tuning
-assistant and firmware files. What's left in the core waits on the write gate, on flashing, or on a question below.
-Dart SDK 3.14.1; `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 129 tests pass in about 14 s
-on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), and both rule checks pass.
-`node tool/export_vectors.mjs` regenerates every vector file byte for byte. CI is green on every push.
+assistant, firmware files and the bench checklist. What's left in the core waits on the write gate, on flashing, or on
+a question below. 131 core tests pass in about 14 s on the VM and in Chrome (one more skips until `HALYARD_DEFS` is
+set); `node tool/export_vectors.mjs` regenerates every vector file byte for byte.
+
+Step 2 (desktop read-only slice) has started: `app/` is a Flutter 3.50 package in the workspace (Material through
+`material_ui`, Provider, auto_route with a generated router, file_selector). The desktop root holds one connection and
+session behind the read-only policy, a definition library and the chosen link. The shell has a navigation rail and a
+status bar; the features are **connect** (add definition files, demo mode on the simulator), **live** (a readout per
+link) and **bench** (the checklist, with blocked writes, requests sent and a copyable report). A widget test runs the
+whole path against the simulator, and `flutter build web` builds. CI now installs Flutter 3.50.0 and runs both
+packages' analysis, formatting and tests plus the rule checks.
 
 | Done and tested against the TypeScript engine | Files |
 |---|---|
@@ -55,6 +64,7 @@ on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), an
 | Read-only bench test: the checklist of reads (identity, definition, a table and a driver, hash, 3 s of live data, password state, CAN ids, on-board logging, faults, trigger) through the read-only policy, and the plain-text report with blocked writes and requests sent. Passes against the simulator; it is what to run first on the real ECU | `core/lib/src/session/bench_check.dart` |
 | Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
 | Live data store | `core/lib/src/live/` |
+| Definition library: definitions the user adds, matched to the connected ECU (exact model, else generic) | `core/lib/src/definition/definition_library.dart` |
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
 | Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
 | Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids; DBC file reading | `core/lib/src/can/` |
@@ -115,7 +125,10 @@ on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), an
 5. **Chrome: done.** The vector loader reads files on the VM and fetches them in a browser; every test except the
    `HALYARD_DEFS` check (`real_definitions_test.dart`) runs in Chrome too, and CI runs both. Locally as root, Chrome
    needs `--no-sandbox`: point `CHROME_EXECUTABLE` at a wrapper script that adds it.
-6. Then the Flutter app scaffold (`flutter create`), step 2 of the build order.
+6. **Step 2, desktop read-only slice: started** (see State). Still to come: serial transports (`app/platform`:
+   flutter_libserialport on desktop, Web Serial through `dart:js_interop`), the workspace (pages, tiles, split tree,
+   command palette) in place of the plain rail, instruments beyond the readout, definition sources from a folder or
+   URL with storage behind a core interface, and the `main_mobile.dart` root.
 
 ## Questions for Kurt
 
