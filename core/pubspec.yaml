@@ -1,0 +1,13 @@
+name: halyard_core
+description: ME360 protocol, definitions, calibration and session logic. Pure Dart, no Flutter, no dart:io.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+environment:
+  sdk: ^3.7.0
+dependencies:
+  xml: ^6.5.0
+dev_dependencies:
+  fake_async: ^1.3.0
+  lints: ^5.0.0
+  test: ^1.25.0

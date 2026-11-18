@@ -1,0 +1,569 @@
+// Generates the golden vectors the Dart core is tested against, by running the TypeScript engine (the oracle).
+//
+//   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
+//
+// Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
+// session}.json and copies the original-decoder fuzz corpus.
+// Deterministic: the same engine produces byte-identical files.
+import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+process.env.TZ = 'UTC'; // the simulator's on-board logs carry local dates
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const me360 = resolve(process.argv[2] ?? resolve(root, '../me360'));
+const out = resolve(root, 'core/test/vectors');
+mkdirSync(out, { recursive: true });
+const src = (f) => import(pathToFileURL(resolve(me360, 'src', f)).href);
+
+const kinds = await src('kinds.ts');
+const tables = await src('tables-msg.ts');
+const drivers = await src('drivers-msg.ts');
+const sys = await src('sys-msg.ts');
+const reporting = await src('reporting.ts');
+const datalog = await src('datalog-msg.ts');
+const trigger = await src('trigger-dbw-msg.ts');
+const faults = await src('faults.ts');
+const firmware = await src('firmware.ts');
+
+// ---------------------------------------------------------------- helpers
+let seed = 0x5eed;
+const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 0x100000000;
+const int = (n) => Math.floor(rnd() * n);
+const pick = (a) => a[int(a.length)];
+const bytes = (n) => Array.from({ length: n }, () => int(256));
+const le16 = (v) => [v & 0xff, (v >> 8) & 0xff];
+const le32 = (v) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+const f32 = (v) => [...new Uint8Array(Float32Array.of(v).buffer)];
+const randF32 = () => (rnd() < 0.85 ? f32((rnd() - 0.5) * 2 * 10 ** int(6)) : bytes(4));
+const hex = (a) => Buffer.from(a).toString('hex');
+const frameHex = (f) => hex([f.type, f.cls, f.cmd, ...f.payload]);
+
+/** JSON-safe form shared with the Dart side: bytes as "hex:..", non-finite numbers as strings, Maps as entry lists. */
+function norm(v) {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (v instanceof Uint8Array) return 'hex:' + hex(v);
+  if (typeof v === 'number') return Number.isFinite(v) ? v : String(v);
+  if (Array.isArray(v)) return v.map(norm);
+  if (v instanceof Map) return [...v.entries()].map(norm);
+  if (typeof v === 'object') {
+    const o = {};
+    for (const [k, x] of Object.entries(v)) { const n = norm(x); if (n !== undefined) o[k] = n; }
+    return o;
+  }
+  return v;
+}
+const attempt = (fn) => { try { return { ok: norm(fn()) }; } catch (e) { return { error: true }; } };
+const write = (name, data) => writeFileSync(resolve(out, name), JSON.stringify(data) + '\n');
+
+// ---------------------------------------------------------------- requests
+const requests = [];
+const req = (name, args, fn) => {
+  const r = attempt(fn);
+  requests.push({ name, args: norm(args), ...(r.error ? { error: true } : { frame: frameHex(fn()) }) });
+};
+const ascii = (n) => String.fromCharCode(...Array.from({ length: n }, () => 32 + int(95)));
+const anyText = (n) => Array.from({ length: n }, () => (rnd() < 0.8 ? String.fromCharCode(32 + int(95)) : pick(['é', 'Ω', '€', '😀', '\u0000']))).join('');
+for (let i = 0; i < 40; i++) {
+  const id = int(65536), u = rnd() < 0.2 ? int(2 ** 31) : id;
+  req('tables.get', [u], () => tables.getTableRequest(u));
+  req('tables.store', [u], () => tables.storeTableRequest(u));
+  req('tables.enable', [u], () => tables.enableTableRequest(u));
+  req('tables.disable', [u], () => tables.disableTableRequest(u));
+  const on = rnd() < 0.5;
+  req('tables.setReporting', [id, on], () => tables.setTableReportingRequest(id, on));
+  const blob = Uint8Array.from(bytes(int(40)));
+  req('tables.set', [id, blob], () => tables.setTableRequest({ id, serialize: () => [...blob] }));
+  req('drivers.set', [id, blob], () => drivers.setDriverRequest({ id, serialize: () => [...blob] }));
+  const n = int(5), offsets = Array.from({ length: n }, () => int(70000)), elem = int(300);
+  const chunks = Array.from({ length: rnd() < 0.1 ? n + 1 : n }, () => Array.from({ length: 1 + int(4) }, () => Math.fround((rnd() - 0.5) * 1e4)));
+  req('tables.setData', [id, elem, offsets, chunks], () => tables.setTableDataRequest(id, elem, offsets, chunks));
+  req('drivers.get', [u], () => drivers.getDriverRequest(u));
+  req('drivers.store', [u], () => drivers.storeDriverRequest(u));
+  const mode = int(300);
+  req('sys.getHash', [mode], () => sys.getHashRequest(mode));
+  const enc = Uint8Array.from(bytes(int(20)));
+  req('sys.raceUnlock', [enc], () => sys.raceUnlockRequest(enc));
+  const rtc = [int(40), int(14), 1990 + int(100), int(30), int(70)];
+  req('sys.setRtc', rtc, () => sys.setRtcRequest(...rtc));
+  const pw = anyText(int(20)), contact = anyText(rnd() < 0.9 ? int(100) : 97 + int(5)), lockedIds = Array.from({ length: int(6) }, () => int(65536));
+  const lock = rnd() < 0.5, temp = rnd() < 0.5;
+  req('sys.pwLockSetState', [lock, temp, pw, contact, lockedIds], () => sys.pwLockSetStateRequest(lock, temp, pw, contact, lockedIds));
+  req('reporting.setState', [on], () => reporting.setStateRequest(on));
+  const freq = int(400), ids = Array.from({ length: int(8) }, () => int(65536));
+  req('reporting.setSpecialCfg', [freq, ids], () => reporting.setSpecialCfgRequest(freq, ids));
+  req('datalog.eraseLog', [id], () => datalog.eraseLogRequest(id));
+  req('datalog.getLogDetail', [u], () => datalog.getLogDetailRequest(u));
+  const start = int(2 ** 32), count = int(2 ** 32);
+  req('datalog.getLogRegion', [id, start, count], () => datalog.getLogRegionRequest(id, start, count));
+  req('datalog.setConfig', [freq, on, ids], () => datalog.setConfigRequest(freq, on, ids));
+  const chans = Array.from({ length: int(5) }, () => int(300) - 2);
+  req('trigger.setState', [on, chans], () => trigger.triggerSetStateRequest(on, chans));
+  req('trigger.setStateMask', [on, id], () => trigger.triggerSetStateRequestMask(on, id));
+  const duty = (rnd() - 0.5) * 300;
+  req('dbw.setDuty', [id & 0x1ff, duty], () => trigger.setDbwDutyRequest(id & 0x1ff, duty));
+  req('faults.getFrameLayout', [id, int(400)], () => faults.faultsGetFrameLayoutRequest(id, requests.at(-1)?.args?.[1] ?? 0));
+  const c2 = int(100);
+  req('faults.getSummary', [id, c2], () => faults.faultsGetSummaryRequest(id, c2));
+  req('faults.getOccurrence', [u], () => faults.faultsGetOccurrenceRequest(u));
+}
+// the getFrameLayout lambda above reads its own args; recompute to keep the vector honest
+for (const r of requests) if (r.name === 'faults.getFrameLayout') r.frame = frameHex(faults.faultsGetFrameLayoutRequest(...r.args));
+for (const [name, fn] of Object.entries({
+  'sys.getEcuInfo': sys.getEcuInfoRequest, 'sys.factoryReset': sys.factoryResetRequest, 'sys.pwLockGetState': sys.pwLockGetStateRequest,
+  'drivers.getCanReservedIds': drivers.getCanReservedIdsRequest, 'datalog.isSupported': datalog.isSupportedRequest,
+  'datalog.getConfig': datalog.getConfigRequest, 'datalog.start': datalog.startRequest, 'datalog.stop': datalog.stopRequest,
+  'datalog.getLogsSummary': datalog.getLogsSummaryRequest, 'datalog.formatMemory': datalog.formatMemoryRequest,
+  'trigger.isSupported': trigger.triggerIsSupportedRequest, 'faults.getInfo': faults.faultsGetInfoRequest,
+  'faults.clear': faults.faultsClearRequest, 'faults.eraseLog': faults.faultsEraseLogRequest, 'firmware.enterBootloader': firmware.enterBootloaderRequest,
+})) req(name, [], fn);
+write('requests.json', requests);
+
+// ---------------------------------------------------------------- replies (classes 1–9; class 0 is stateful, below)
+const status = () => (rnd() < 0.85 ? pick([0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 255]) : int(256));
+const utf8 = (s) => [...new TextEncoder().encode(s)];
+const logInfo = () => {
+  const valid = rnd() < 0.85;
+  return [int(256), valid ? 1 + int(28) : int(40), valid ? 1 + int(12) : int(16), ...le16(valid ? 2000 + int(40) : int(65536)),
+    valid ? int(24) : int(30), valid ? int(60) : int(70), ...randF32(), ...le32(int(2 ** 32)), ...le16(int(6))];
+};
+const GEN = {
+  '1/1': () => { const n = int(30); return [status(), ...le16(int(65536)), ...le16(n), ...bytes(n)]; },
+  '1/4': () => { const n = int(5); return [status(), ...le16(int(65536)), int(256), ...le16(n), ...Array.from({ length: n }, () => [...le16(int(65536)), ...randF32()]).flat()]; },
+  '2/1': () => { const n = int(30); return [status(), ...le16(int(65536)), ...le16(n), ...bytes(n)]; },
+  '2/3': () => { const n = int(6); return [status(), n, ...Array.from({ length: n }, () => [...le32(int(2 ** 32)), int(8)]).flat()]; },
+  '4/0': () => {
+    const parts = [ascii(int(10)), ascii(int(10)), ascii(int(6)), ascii(int(6)), ascii(int(16)),
+      pick(['', '1a2b', '0x00ff', 'FFFF', '10000', 'zz', '0x', '000000001', '123456789']), pick(['PW', '', 'pw'])];
+    let s = parts.slice(0, 3 + int(6)).join('\0');
+    if (rnd() < 0.2) s += '\0' + anyText(4);
+    const b = utf8(s);
+    if (rnd() < 0.15) b.splice(int(b.length + 1), 0, pick([0xff, 0xc3, 0xe2, 0x80, 0xf0, 0xed]));
+    return [status(), ...b];
+  },
+  '4/1': () => {
+    const mode = pick([0, 1, 1, 2]), n = int(5), keys = Array.from({ length: n }, () => (rnd() < 0.15 ? 7 : int(65536)));
+    return [status(), mode, ...le16(int(65536)), ...(mode === 1 ? [...le16(n), ...keys.flatMap((k) => [...le16(k), ...le16(int(65536))])] : [])];
+  },
+  '4/4': () => [status(), int(3), int(3)],
+  '4/5': () => [status(), int(3), int(3), ...utf8(anyText(int(20)))],
+  '6/0': () => [status(), ...le16(int(65536)), ...le16(int(65536))],
+  '6/1': () => { const n = int(6); return [status(), ...le16(int(1000)), ...le16(n), int(3), ...Array.from({ length: n }, () => le16(int(65536))).flat()]; },
+  '6/5': () => { const n = int(4); return [status(), ...le16(n), ...bytes(8), ...Array.from({ length: n }, logInfo).flat()]; },
+  '6/6': () => { const li = logInfo(); const nc = li[15] | (li[16] << 8); return [status(), ...li, ...Array.from({ length: nc }, () => le16(int(65536))).flat()]; },
+  '6/7': () => { const nc = int(4), ne = int(4); return [status(), int(256), ...le16(nc), ...le32(int(2 ** 32)), ...le32(ne), ...Array.from({ length: ne * (nc + 1) }, randF32).flat()]; },
+  '6/8': () => [status(), int(256)],
+  '7/0': () => [status(), ...(rnd() < 0.7 ? [int(256)] : [])],
+  '7/1': () => [status(), int(3), int(256), ...le32(int(2 ** 32))],
+  '7/2': () => { const n = int(6); return [status(), ...le16(n), ...bytes(3 * n)]; },
+  '9/0': () => [status(), ...bytes(24)],
+  '9/1': () => { const n = int(6); return [status(), ...le16(int(100)), ...le16(n), ...le16(int(200)), ...bytes(3 * n)]; },
+  '9/2': () => { const n = int(3); return [status(), ...le16(int(100)), ...le16(n), ...le16(int(200)), ...bytes(26 * n)]; },
+  '9/3': () => {
+    const body = bytes(int(40)), size = 28 + (rnd() < 0.8 ? body.length : int(60));
+    const rec = [...le16(rnd() < 0.7 ? 0xfa17 : int(65536)), int(5), int(256), ...le32(int(2 ** 32)), ...le16(int(65536)), ...le16(int(65536)),
+      ...le32(int(2 ** 32)), ...le32(int(2 ** 32)), ...le32(int(2 ** 32)), ...le16(rnd() < 0.8 ? body.length : int(80)), ...le16(int(65536)), ...body];
+    return [status(), ...le16(int(65536)), ...le16(size), ...rec];
+  },
+};
+const RECOGNISED = { 1: [0, 1, 2, 3, 4, 6, 7], 2: [0, 1, 2, 3], 4: [0, 1, 3, 4, 5, 6], 5: [0, 1, 2, 3], 6: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 7: [0, 1, 2], 9: [0, 1, 2, 3, 4, 5] };
+const mutate = (p) => {
+  const r = rnd();
+  if (r < 0.55) return p;
+  if (r < 0.8) return p.slice(0, int(p.length + 1));
+  const q = [...p];
+  for (let k = 1 + int(3); k > 0 && q.length; k--) q[int(q.length)] = int(256);
+  if (rnd() < 0.3) q.push(...bytes(int(8)));
+  return q;
+};
+const replies = [];
+for (const [cls, cmds] of Object.entries(RECOGNISED)) for (const cmd of cmds) {
+  const gen = GEN[`${cls}/${cmd}`] ?? (() => [status(), ...(cls === '1' || (cls === '2' && cmd <= 2) ? le16(int(65536)) : []), ...bytes(int(4))]);
+  for (let i = 0; i < 120; i++) {
+    const frame = { type: 0x0f, cls: Number(cls), cmd, payload: Uint8Array.from(mutate(gen())) };
+    const f = new kinds.MessageFactory();
+    replies.push({ frame: frameHex(frame), reply: norm(f.create(frame)) });
+  }
+}
+write('replies.json', replies);
+
+// ---------------------------------------------------------------- reporting: stateful sequences through one factory
+const linkMap = (n) => Array.from({ length: n }, () => [...le16(rnd() < 0.2 ? int(4) : int(65536)), rnd() < 0.9 ? int(6) : int(256)]);
+const sizeOf = (t) => [4, 2, 2, 1, 1, 1][t] ?? 4;
+const reportingSeq = [];
+for (let s = 0; s < 400; s++) {
+  const f = new kinds.MessageFactory(); const frames = []; const results = [];
+  let layout = [];
+  for (let k = 1 + int(6); k > 0; k--) {
+    let p; let cmd = pick([0, 0, 0, 1, 2, 2, 3, 0]);
+    if (cmd === 2) {
+      if (rnd() < 0.3) p = [status()];
+      else { const m = linkMap(int(6)); layout = m; p = [status(), ...le16(m.length), ...m.flat()]; }
+    } else if (cmd === 3) { const m = linkMap(int(6)); layout = m; p = [status(), int(256), ...le16(m.length), ...m.flat()]; }
+    else if (cmd === 1) p = [status()];
+    else if (rnd() < 0.5 && layout.length) {
+      p = [status()];
+      const seen = new Set();
+      for (const e of layout) { const id = e[0] | (e[1] << 8); if (seen.has(id)) continue; seen.add(id); p.push(...bytes(sizeOf(e[2]))); }
+    } else { const n = int(4); p = [status(), ...le16(n), ...Array.from({ length: n }, () => [...le16(int(65536)), ...randF32()]).flat()]; }
+    if (rnd() < 0.15) p = p.slice(0, int(p.length + 1));
+    const frame = { type: 0x0f, cls: 0, cmd, payload: Uint8Array.from(p) };
+    frames.push(frameHex(frame)); results.push(norm(f.create(frame)));
+  }
+  reportingSeq.push({ frames, replies: results });
+}
+write('reporting.json', reportingSeq);
+
+// ---------------------------------------------------------------- recognition, reply matching, ECU-side firmware requests
+const recognition = [];
+for (let i = 0; i < 3000; i++) {
+  const type = pick([0x0f, 0x0f, 0x00, 0x00, int(256)]), cls = rnd() < 0.9 ? int(11) : int(256), cmd = rnd() < 0.9 ? int(11) : int(256);
+  const gen = GEN[`${cls}/${cmd}`];
+  const payload = Uint8Array.from(gen && type === 0x0f && rnd() < 0.6 ? mutate(gen()) : bytes(int(14)));
+  const frame = { type, cls, cmd, payload };
+  const f = new kinds.MessageFactory();
+  const row = {
+    frame: frameHex(frame), recognised: kinds.isRecognised(frame, f), countsAsReply: kinds.countsAsReply(frame, f),
+    entityId: kinds.entityId(frame) ?? null, successful: kinds.isSuccessful(frame), expected: norm(kinds.expectedReply(frame)),
+  };
+  if (type === 0 && cls === 5 && (cmd === 1 || cmd === 2)) row.fwRequest = attempt(() => firmware.parseFwRequest(frame));
+  recognition.push(row);
+}
+write('recognition.json', recognition);
+
+// ---------------------------------------------------------------- device files: synthetic definitions and calibrations
+// Made up here, so no vendor content enters the repo. Each is loaded by the TypeScript engine; the vectors hold what it
+// built: wire blobs and hashes per table and driver, the overall hash, and which items it kept.
+const { DeviceDataModel } = await src('device-model.ts');
+const TYPES = [['T1x16', 1, 16], ['T1x32', 1, 32], ['T16x16', 16, 16], ['T32x32', 32, 32], ['T1x2', 1, 2], ['T8x8', 8, 8]];
+const numText = (v) => pick([String(v), ` ${v} `, v.toExponential(), String(v).replace(/^0\./, '.'), String(v)]);
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const el = (name, body) => `<${name}>${body}</${name}>`;
+const floatsXml = (vals) => vals.map((v) => el('float', numText(v))).join('');
+const randVal = () => Math.round((rnd() - 0.3) * 10 ** int(5)) / 10 ** int(3);
+function deviceXml() {
+  const nLinks = 3 + int(12), linkIds = Array.from({ length: nLinks }, (_, i) => i + 1 + (rnd() < 0.2 ? 500 : 0));
+  const parts = [];
+  parts.push(el('DeviceDataInformationModel', el('ProductName', 'SIM-ECU') + el('ModelName', pick(['GENERIC', 'TEST'])) + el('Version', String(1 + int(99))) + (rnd() < 0.5 ? el('FWVersion', '1.' + int(9)) : '')));
+  if (rnd() < 0.5) parts.push(el('CalibrationNotes', el('Text', esc(anyText(int(30)).replace(/\u0000/g, ''))))); // XML forbids NUL
+  const links = linkIds.map((id) => el('DataLinkModel', el('id', String(id)) + el('name', 'Link ' + id) + el('category', pick(['Inputs', 'Fuel', 'Ignition'])) +
+    (rnd() < 0.5 ? el('ViewInTree', pick(['true', 'false', '1'])) : '') + (rnd() < 0.3 ? el('MinValue', numText(-10)) + el('MaxValue', numText(100 + int(9000))) : '') +
+    (rnd() < 0.3 ? el('StandardLogging', 'true') : '') + (rnd() < 0.2 ? el('MeasurementUnitTypes', '<Celsius /><Fahrenheit />') : '') +
+    (rnd() < 0.2 ? el('TextValues', [0, 1, 2].map((v) => el('TextValueModel', el('value', String(v)) + el('text', 'T' + v))).join('')) : '') +
+    (rnd() < 0.2 ? el('Feedbacks', el('Warning', el('Constraints', `<Gt Value="${int(100)}" /><Eq Value="1 2  3" />`)) + `<Alarm Flashing="true">${el('Constraints', `<LtEq Value="-${int(9)}.5" />`)}</Alarm>`) : '') +
+    (rnd() < 0.1 ? el('DataTypeSet', pick(['Normal', 'Percent', 'ADCRaw'])) : '')));
+  const tableIds = Array.from({ length: 2 + int(8) }, (_, i) => (rnd() < 0.1 ? 4096 : 4096 + i));
+  const tables = tableIds.map((id) => {
+    const [type, rows, cols] = pick(TYPES);
+    const lk = () => (rnd() < 0.07 ? 999 : pick(linkIds));
+    const n = (k) => (rnd() < 0.15 ? Math.max(0, k + int(5) - 2) : k);
+    return el('TableModel', el('name', 'Table ' + id) + el('id', String(id)) + el('type', type) + el('cols', String(cols)) + el('rows', String(rows)) +
+      el('input_0_LinkId', String(lk())) + (rows > 1 || rnd() < 0.3 ? el('input_1_LinkId', String(lk())) : '') + el('output_LinkId', String(lk())) +
+      el('enabled', pick(['true', 'false'])) + (rnd() < 0.3 ? el('incVal', numText(0.25)) : '') +
+      (rnd() < 0.85 ? el('input_0', floatsXml(Array.from({ length: n(cols) }, randVal))) : '') +
+      (rows > 1 && rnd() < 0.85 ? el('input_1', floatsXml(Array.from({ length: n(rows) }, randVal))) : '') +
+      (rnd() < 0.85 ? el('output', floatsXml(Array.from({ length: n(rows * cols) }, randVal))) : ''));
+  });
+  const drivers = Array.from({ length: 1 + int(5) }, (_, i) => {
+    const nc = int(8), no = int(5), ni = int(5), ps = rnd() < 0.4 ? 1 + int(12) : 0;
+    const params = Array.from({ length: nc }, (_, k) => el('DriverModelParam', el('name', 'P' + k) + el('type', pick(['InputBox', 'ComboBox'])) +
+      (rnd() < 0.8 ? el('value', numText(randVal())) : '') + (rnd() < 0.3 ? el('Min', '0') + el('Max', '100') + el('CheckRange', 'true') : '') +
+      (rnd() < 0.2 ? el('options', [0, 1].map((o) => el('comboBoxOption', el('id', String(o)) + el('name', 'O' + o))).join('')) : '')));
+    const ids = (k) => el('unsignedShort', String(int(65536))).repeat(1) && Array.from({ length: rnd() < 0.15 ? Math.max(0, k + int(3) - 1) : k }, () => el('unsignedShort', String(int(65536)))).join('');
+    const priv = Buffer.from(bytes(ps === 0 ? 0 : rnd() < 0.2 ? Math.max(0, ps + int(5) - 2) : ps)).toString('base64');
+    return el('DriverModel', el('id', String(8192 + i)) + el('name', 'Driver ' + i) + el('numberOfConfigs', String(nc)) + el('configParams', params.join('')) +
+      el('numberOfOutputs', String(no)) + el('outputLinkIds', ids(no)) + el('numberOfInputs', String(ni)) + el('inputLinkIds', ids(ni)) +
+      (ps ? el('privSize', String(ps)) + el('privData', priv) : '') + (rnd() < 0.2 ? el('ConfigValidation', el('CheckDuplicates', 'true')) : ''));
+  });
+  return '﻿<?xml version="1.0" encoding="utf-8"?>\n<ecu>\n' + parts.join('\n') + `\n<links>${links.join('\n')}</links>\n<tables>${tables.join('\n')}</tables>\n<drivers>${drivers.join('\n')}</drivers>\n</ecu>\n`;
+}
+const deviceFiles = [];
+for (let i = 0; i < 150; i++) {
+  let xml = deviceXml();
+  if (i % 15 === 14) xml = xml.replace(/<cols>(\d+)<\/cols>/, '<cols>x$1</cols>');          // a malformed number
+  if (i % 25 === 24) xml = xml.replace('<tables>', '<tablez>').replace('</tables>', '</tablez>'); // a missing section
+  let m;
+  try { m = DeviceDataModel.fromXml(xml, null); } catch { deviceFiles.push({ xml, error: true }); continue; }
+  const v = m.versionInformation;
+  deviceFiles.push({
+    xml,
+    info: norm({ productName: v.productName ?? null, modelName: v.modelName ?? null, version: v.version ?? null, fwVersion: v.fwVersion ?? null }),
+    notes: m.notes.text,
+    links: [...m.allDataLinks.keys()],
+    tables: [...m.allTables.values()].map((t) => ({ id: t.id, blob: hex(t.serialize()), hash: t.getHash() })),
+    drivers: [...m.allDrivers.values()].map((d) => ({ id: d.id, blob: hex(d.serialize()), hash: d.getHash() })),
+    overall: m.getOverallHash(),
+  });
+}
+write('device_files.json', deviceFiles);
+
+// ---------------------------------------------------------------- calibration files: the .mecal writer
+// Richer synthetic files that use every member the writer knows, odd text and awkward float values. For each: the file
+// as loaded and saved by the TypeScript writer, then edits through wire blobs (as reads from the ECU arrive) and new
+// notes, and the file saved again.
+const { saveCalibrationXml } = await src('calibration.ts');
+const ODD_FLOATS = [0, -0, 1, -1, 0.1, 1 / 3, NaN, Infinity, -Infinity, 1e-45, 1.1754943508222875e-38, 3.4028234663852886e38,
+  0.00048828125, 0.0009765625, 16777216, 123456792, 1e7, 9999999, 1e-5, 0.0001, 12345.678, 100000, 1234567.5, -2.5e-7, 0.5, 65535];
+const oddF32 = () => (rnd() < 0.5 ? pick(ODD_FLOATS) : Math.fround((rnd() - 0.5) * 10 ** (int(16) - 8)));
+const xmlNum = (v) => (Number.isNaN(v) ? 'NaN' : v === Infinity ? 'INF' : v === -Infinity ? '-INF' : Object.is(v, -0) ? '-0' : numText(v));
+const oddText = () => pick(['', ' ', 'Plain', '  padded  ', 'Fuel & <Air> "quoted" \'single\'', 'tab\there', 'line\nbreak', 'cr\r\nlf', 'lone\rcr',
+  'é Ω € 😀', ']]> end', anyText(int(12)).replace(/\u0000/g, '')]);
+const textEl = (name) => (rnd() < 0.15 ? `<${name} />` : rnd() < 0.1 ? `<${name}><![CDATA[c<d>&]]></${name}>` : el(name, esc(oddText())));
+const attrText = () => pick(['g1', 'a&amp;b', 'q&quot;t', 'tab&#x9;ref', 'nl&#xA;ref', 'raw\ttab', 'raw\nnl', '&lt;x&gt;', '']);
+const UNIT_NAMES = ['Raw', 'Volt', 'Ohm', 'KPa', 'PSI', 'Celsius', 'Fahrenheit'];
+const unitsXml = () => el('MeasurementUnitTypes', Array.from({ length: int(3) }, () => `<${pick(UNIT_NAMES)} />`).join(''));
+const maybe = (p, f) => (rnd() < p ? f() : '');
+const baseXml = (id) => maybe(0.3, () => el('DefaultLocked', pick(['true', 'false']))) + el('id', String(id)) + maybe(0.9, () => textEl('name')) +
+  maybe(0.4, () => el('ViewInTree', pick(['true', 'false']))) + maybe(0.3, () => el('BoardSpecific', pick(['true', '1', 'false']))) + maybe(0.8, () => textEl('category'));
+const validationXml = (name) => el(name, maybe(0.7, () => el('CheckDuplicates', pick(['true', 'false']))) +
+  maybe(0.6, () => el('DefaultValues', Array.from({ length: int(4) }, () => `<DefaultValue${maybe(0.6, () => ` Group="${attrText()}"`)}${maybe(0.9, () => ` Value="${xmlNum(oddF32())}"`)} />`).join(''))) +
+  maybe(0.5, () => el('Exceptions', Array.from({ length: int(3) }, () => `<${pick(['AllowMultipleDuplicates', 'AllowIndex', 'AllowValue', 'DenyValue', 'DenyIndex'])}${maybe(0.5, () => ` Group="${attrText()}"`)} Value="${int(9)}" />`).join(''))));
+const linkCfgXml = (name) => el(name, Array.from({ length: int(4) }, () => el('LinkConfig', el('Index', String(int(9))) + el('Visible', pick(['true', 'false'])))).join(''));
+const namesXml = (name, n) => el(name, Array.from({ length: n }, () => (rnd() < 0.2 ? '<string />' : el('string', esc(oddText())))).join(''));
+
+function richXml() {
+  const linkIds = Array.from({ length: 3 + int(8) }, (_, i) => 1 + i);
+  const parts = [];
+  if (rnd() < 0.9) parts.push(el('DeviceDataInformationModel', maybe(0.9, () => el('ProductName', 'SIM-ECU')) + maybe(0.9, () => el('ModelName', pick(['GENERIC', 'TEST']))) +
+    maybe(0.9, () => el('Version', String(1 + int(99)))) + maybe(0.5, () => el('FWVersion', '1.' + int(9)))));
+  if (rnd() < 0.7) parts.push(rnd() < 0.2 ? '<CalibrationNotes />' : el('CalibrationNotes', textEl('Text')));
+  const links = linkIds.map((id) => el('DataLinkModel', baseXml(id) + maybe(0.3, () => textEl('DataKey')) +
+    maybe(0.3, () => el('Feedbacks', Array.from({ length: 1 + int(3) }, () => {
+      const kind = pick(['Default', 'Ok', 'Warning', 'Alarm']);
+      const cons = maybe(0.8, () => el('Constraints', Array.from({ length: int(3) }, () => {
+        const k = pick(['Eq', 'Gt', 'GtEq', 'GtInc', 'Lt', 'LtEq']);
+        if (k === 'Eq') return rnd() < 0.2 ? '<Eq />' : `<Eq Value="${Array.from({ length: 1 + int(3) }, () => xmlNum(oddF32())).join(pick([' ', '  ', '\t']))}" />`;
+        return `<${k} Value="${xmlNum(oddF32())}" />`;
+      }).join('')));
+      return `<${kind}${maybe(0.4, () => ` Flashing="${pick(['true', 'false'])}"`)}>${cons}</${kind}>`;
+    }).join(''))) +
+    maybe(0.5, () => unitsXml()) + maybe(0.4, () => textEl('measureUnit')) + maybe(0.3, () => el('StandardLogging', pick(['true', 'false']))) +
+    maybe(0.3, () => el('TextValues', [0, 1, 2, 5].slice(0, int(5)).map((v) => el('TextValueModel', el('value', String(v)) + maybe(0.8, () => textEl('text')))).join(''))) +
+    maybe(0.3, () => el('DataTypeSet', pick(['Normal', 'TrimModPercent', 'Percent', 'ADCRaw']))) +
+    maybe(0.4, () => el('MinValue', xmlNum(oddF32())) + el('MaxValue', xmlNum(oddF32())))));
+  const tables = Array.from({ length: 1 + int(6) }, (_, i) => {
+    const [type, rows, cols] = pick(rnd() < 0.9 ? TYPES.filter(([n]) => n !== 'T32x32') : TYPES);
+    const vals = (n) => Array.from({ length: n }, () => el('float', xmlNum(oddF32()))).join('');
+    return el('TableModel', baseXml(4096 + i) + maybe(0.8, () => el('enabled', pick(['true', 'false']))) + el('type', type) +
+      maybe(0.3, () => el('function', pick(['Normal', 'PercentTrim']))) + el('cols', String(cols)) + el('rows', String(rows)) +
+      el('input_0_LinkId', String(pick(linkIds))) + el('input_1_LinkId', String(rows > 1 ? pick(linkIds) : pick([0, ...linkIds]))) + el('output_LinkId', String(pick(linkIds))) +
+      maybe(0.5, () => textEl('input_0_name')) + maybe(0.5, () => textEl('input_1_name')) + maybe(0.5, () => textEl('output_name')) +
+      maybe(0.9, () => el('input_0', vals(cols))) + maybe(0.7, () => el('input_1', vals(rows))) + maybe(0.9, () => el('output', vals(rows * cols))) +
+      maybe(0.5, () => el('incVal', xmlNum(oddF32()))) + maybe(0.5, () => el('defaultValue', xmlNum(oddF32()))) + maybe(0.3, () => textEl('DataKey')));
+  });
+  const drivers = Array.from({ length: 1 + int(4) }, (_, i) => {
+    const nc = int(7), no = int(5), ni = int(5), ps = rnd() < 0.4 ? 1 + int(12) : 0;
+    const params = Array.from({ length: nc }, () => el('DriverModelParam', maybe(0.3, () => textEl('ValidationGroup')) + maybe(0.9, () => textEl('name')) +
+      maybe(0.5, () => textEl('DisplayName')) + maybe(0.5, () => textEl('SectionName')) + maybe(0.8, () => el('type', pick(['InputBox', 'ComboBox']))) +
+      maybe(0.3, () => el('readOnly', pick(['true', 'false']))) + maybe(0.3, () => el('Hidden', pick(['true', 'false']))) + maybe(0.3, () => el('RequiresReset', 'true')) +
+      maybe(0.4, () => textEl('ToolTipText')) + maybe(0.8, () => el('value', xmlNum(oddF32()))) + maybe(0.4, () => el('Min', xmlNum(oddF32())) + el('Max', xmlNum(oddF32()))) +
+      maybe(0.3, () => el('CheckRange', pick(['true', 'false']))) +
+      maybe(0.2, () => el('ViewConstraint', el('ParamIndex', String(int(nc))) + maybe(0.8, () => el('AcceptedValues', Array.from({ length: int(3) }, () => el('float', String(int(4)))).join(''))))) +
+      maybe(0.3, () => el('options', Array.from({ length: int(4) }, (_, o) => el('comboBoxOption', el('id', String(o)) + maybe(0.8, () => textEl('name')))).join(''))) +
+      maybe(0.4, () => unitsXml())));
+    const ids = (k) => Array.from({ length: k }, () => el('unsignedShort', String(int(65536)))).join('');
+    return el('DriverModel', baseXml(8192 + i) + maybe(0.3, () => validationXml('ConfigValidation')) + el('numberOfConfigs', String(nc)) + el('configParams', params.join('')) +
+      (ps ? el('privSize', String(ps)) + maybe(0.8, () => el('privData', Buffer.from(bytes(ps)).toString('base64'))) : '') +
+      maybe(0.3, () => validationXml('OutputValidation')) + el('numberOfOutputs', String(no)) + maybe(0.9, () => el('outputLinkIds', ids(no))) +
+      maybe(0.4, () => el('editableOutputs', pick(['true', 'false']))) + maybe(0.5, () => namesXml('outputNames', no)) + maybe(0.3, () => validationXml('InputValidation')) +
+      maybe(0.4, () => el('editableInputs', pick(['true', 'false']))) + maybe(0.5, () => namesXml('inputNames', ni)) + el('numberOfInputs', String(ni)) +
+      maybe(0.9, () => el('inputLinkIds', ids(ni))) + maybe(0.3, () => linkCfgXml('InputLinksConfigs')) + maybe(0.3, () => linkCfgXml('OutputLinkConfigs')));
+  });
+  return '﻿<?xml version="1.0" encoding="utf-8"?>\r\n<ecu>\r\n' + parts.join('\r\n') + `\r\n<links>${links.join('\n')}</links>\n<drivers>${drivers.join('\n')}</drivers>\n<tables>${tables.join('\n')}</tables>\n</ecu>`;
+}
+
+const f32Bytes = (vals) => vals.flatMap(f32);
+const calibrationFiles = [];
+for (let i = 0; i < 60; i++) {
+  const xml = richXml();
+  const m = DeviceDataModel.fromXml(xml, null);
+  const saved = saveCalibrationXml(m);
+  const tableEdits = [...m.allTables.values()].filter(() => rnd() < 0.6).map((t) => {
+    const blob = Uint8Array.from([t.type, int(2), t.rows, t.cols, ...(t.rows > 1 ? f32Bytes(Array.from({ length: t.rows }, oddF32)) : []),
+      ...f32Bytes(Array.from({ length: t.cols }, oddF32)), ...f32Bytes(Array.from({ length: t.rows * t.cols }, oddF32))]);
+    t.deserialize(blob);
+    return { id: t.id, blob: hex(blob) };
+  });
+  const driverEdits = [...m.allDrivers.values()].filter(() => rnd() < 0.6).map((d) => {
+    const blob = Uint8Array.from([d.numberOfConfigs, d.numberOfOutputs, d.numberOfInputs, ...f32Bytes(Array.from({ length: d.numberOfConfigs }, oddF32)),
+      ...Array.from({ length: d.numberOfOutputs + d.numberOfInputs }, () => le16(int(65536))).flat(), ...bytes(d.privSize)]);
+    d.deserialize(blob);
+    return { id: d.id, blob: hex(blob) };
+  });
+  const notes = rnd() < 0.2 ? null : oddText();
+  m.updateNotes({ text: notes });
+  calibrationFiles.push({ xml, saved, tableEdits, driverEdits, notes, savedAfterEdits: saveCalibrationXml(m) });
+}
+write('calibration_files.json', calibrationFiles);
+
+// ---------------------------------------------------------------- simulator: scripted sessions against the TypeScript ECU
+// Each session loads a synthetic definition into the simulator at a fixed clock, then sends requests and runs report
+// ticks; the vectors hold every reply. Timers are stubbed so nothing runs on its own.
+const { SimEcu } = await src('ecu-sim.ts');
+const SPECIAL_LINKS = [1, 1015, 1018, 2331, 2332, 2333, 2334, 2335, 2339, 2340, 2341];
+const DBW_KEYS = ['DBW_PWM', 'DBW_BATT_V_MULT', 'TPPS1_VAL', 'TPPS2_VAL', 'TPPS1_RAW', 'TPPS2_RAW', 'RPM'];
+function simXml() {
+  const ids = [...new Set([...SPECIAL_LINKS.filter(() => rnd() < 0.5), ...Array.from({ length: 3 + int(8) }, () => 3 + int(900))])];
+  const links = ids.map((id) => el('DataLinkModel', el('id', String(id)) + el('name', 'L' + id) + maybe(0.6, () => el('ViewInTree', 'true')) +
+    maybe(0.5, () => el('StandardLogging', 'true')) + maybe(0.3, () => el('DataKey', pick(DBW_KEYS))) +
+    maybe(0.2, () => el('TextValues', [0, 1, 3].slice(0, 1 + int(3)).map((v) => el('TextValueModel', el('value', String(v)) + el('text', 'T' + v))).join(''))) +
+    maybe(0.4, () => el('MinValue', String(-int(50))) + el('MaxValue', String(int(9000)))) + maybe(0.05, () => el('MinValue', 'INF'))));
+  const tables = Array.from({ length: 1 + int(5) }, (_, i) => {
+    const [type, rows, cols] = pick(TYPES.filter(([n]) => n !== 'T32x32'));
+    const axis = (n) => Array.from({ length: n }, (_, k) => el('float', String(k * (1 + int(500)) - int(100)))).join('');
+    return el('TableModel', el('id', String(4096 + i)) + el('type', type) + el('cols', String(cols)) + el('rows', String(rows)) + maybe(0.6, () => el('ViewInTree', 'true')) +
+      el('input_0_LinkId', String(pick(ids))) + el('input_1_LinkId', String(pick(ids))) + el('output_LinkId', String(pick(ids))) +
+      el('input_0', axis(cols)) + el('input_1', axis(rows)) + el('output', Array.from({ length: rows * cols }, () => el('float', numText(randVal()))).join('')));
+  });
+  const drivers = Array.from({ length: 1 + int(3) }, (_, i) => {
+    const nc = int(5), no = int(4), ni = int(4), ps = rnd() < 0.3 ? 1 + int(8) : 0;
+    return el('DriverModel', el('id', String(8192 + i)) + el('numberOfConfigs', String(nc)) +
+      el('configParams', Array.from({ length: nc }, (_, k) => el('DriverModelParam', el('name', 'P' + k) + el('value', numText(randVal())))).join('')) +
+      el('numberOfOutputs', String(no)) + el('outputLinkIds', Array.from({ length: no }, () => el('unsignedShort', String(int(65536)))).join('')) +
+      el('numberOfInputs', String(ni)) + el('inputLinkIds', Array.from({ length: ni }, () => el('unsignedShort', String(int(65536)))).join('')) +
+      (ps ? el('privSize', String(ps)) + el('privData', Buffer.from(bytes(ps)).toString('base64')) : ''));
+  });
+  return '<ecu>' + el('DeviceDataInformationModel', el('ProductName', 'SIM-ECU') + el('ModelName', 'TEST') + el('Version', String(1 + int(99)))) +
+    `<links>${links.join('')}</links><tables>${tables.join('')}</tables><drivers>${drivers.join('')}</drivers></ecu>`;
+}
+const realSetInterval = globalThis.setInterval, realClearInterval = globalThis.clearInterval;
+globalThis.setInterval = () => ({}); globalThis.clearInterval = () => {};
+const simSessions = [];
+for (let i = 0; i < 25; i++) {
+  const xml = simXml();
+  const m = DeviceDataModel.fromXml(xml, null);
+  let now = Date.UTC(2026, 10, 18, 12, 34, 56, 789) + int(1e9);
+  const options = { uuid: 'SIM-' + i, fwVersion: '1.' + int(9), reportMs: 100, engineStopped: rnd() < 0.3 };
+  const ecu = new SimEcu(m, { ...options, now: () => now });
+  const replies = [];
+  ecu.reply = (cls, cmd, p) => replies.push(hex([0x0f, cls, cmd, ...p]));
+  const steps = [];
+  const step = (what, fn) => { replies.length = 0; fn(); steps.push({ ...what, at: now, replies: [...replies] }); };
+  const send = (f) => step({ send: frameHex(f) }, () => ecu.handle(f));
+  const op = (name) => step({ op: name }, () => ecu[name]());
+  const later = (ms) => { now += ms; };
+  const tableIds = [...m.allTables.keys()], driverIds = [...m.allDrivers.keys()];
+
+  send(sys.getEcuInfoRequest()); send(sys.getHashRequest(0)); send(sys.getHashRequest(1)); send(sys.pwLockGetStateRequest());
+  for (const id of tableIds) send(tables.getTableRequest(id));
+  for (const id of driverIds) send(drivers.getDriverRequest(id));
+  send(tables.getTableRequest(9999)); send(drivers.getDriverRequest(9999)); send(tables.setTableRequest({ id: 9999, serialize: () => [] }));
+  for (const id of tableIds.filter(() => rnd() < 0.7)) {
+    const t = m.allTables.get(id);
+    const blob = [t.type, int(2), t.rows, t.cols, ...(t.rows > 1 ? f32Bytes(Array.from({ length: t.rows }, oddF32)) : []),
+      ...f32Bytes(Array.from({ length: t.cols }, oddF32)), ...f32Bytes(Array.from({ length: t.rows * t.cols }, oddF32))];
+    send(tables.setTableRequest({ id, serialize: () => blob }));
+    const elem = int(3), n = elem === 0 ? t.cols : elem === 1 ? t.rows : t.rows * t.cols;
+    const offsets = Array.from({ length: 1 + int(4) }, () => int(n));
+    send(tables.setTableDataRequest(id, elem, offsets, offsets.map(() => [oddF32()])));
+    send(tables.storeTableRequest(id)); send(tables.getTableRequest(id));
+  }
+  for (const id of driverIds.filter(() => rnd() < 0.7)) {
+    const d = m.allDrivers.get(id);
+    const blob = [d.numberOfConfigs, d.numberOfOutputs, d.numberOfInputs, ...f32Bytes(Array.from({ length: d.numberOfConfigs }, oddF32)),
+      ...Array.from({ length: d.numberOfOutputs + d.numberOfInputs }, () => le16(int(65536))).flat(), ...bytes(d.privSize)];
+    send(drivers.setDriverRequest({ id, serialize: () => blob })); send(drivers.storeDriverRequest(id)); send(drivers.getDriverRequest(id));
+  }
+  send(sys.getHashRequest(1)); send(drivers.getCanReservedIdsRequest()); send(sys.factoryResetRequest());
+  send(reporting.setStateRequest(true));
+  for (let k = 0; k < 4; k++) { later(100 + int(5000)); op('report'); }
+  send(trigger.setDbwDutyRequest(1, (rnd() - 0.3) * 200)); op('report');
+  send(reporting.setStateRequest(false));
+
+  if (rnd() < 0.7) op('seedDataLogging');
+  send(datalog.isSupportedRequest()); send(datalog.getConfigRequest()); send(datalog.getLogsSummaryRequest());
+  const chans = [...m.allDataLinks.keys()].filter(() => rnd() < 0.5);
+  send(datalog.setConfigRequest(1 + int(100), rnd() < 0.5, chans));
+  send(datalog.startRequest()); later(1000 + int(60000)); op('report'); send(datalog.setConfigRequest(10, false, []));
+  send(datalog.stopRequest()); send(datalog.getLogsSummaryRequest());
+  for (const id of [1, 2, 3, 77]) { send(datalog.getLogDetailRequest(id)); send(datalog.getLogRegionRequest(id, int(50), 1 + int(60))); }
+  send(datalog.eraseLogRequest(1)); send(datalog.eraseLogRequest(1)); send(datalog.getLogsSummaryRequest());
+  send(datalog.formatMemoryRequest()); send(datalog.getLogsSummaryRequest());
+  send(trigger.triggerIsSupportedRequest()); send(trigger.triggerSetStateRequest(true, pick([[0], [1], [0, 1]])));
+  for (let k = 0; k < 5; k++) op('triggerReport');
+  send(trigger.triggerSetStateRequest(false, [])); send(faults.faultsGetInfoRequest());
+  ecu.attach(null);
+  simSessions.push({ xml, options, steps });
+}
+globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
+write('simulator.json', simSessions);
+
+// ---------------------------------------------------------------- session: the connect sequence of the TypeScript app
+// The TypeScript app model connects to its simulator over the real channel and connection code, with real timers. The
+// vectors hold the session's own requests (classes 0, 1, 2 and 4, without the lifesign) and what the host ended up with.
+// Scenarios: a first connect, a reconnect to an unchanged ECU, a reconnect after the ECU changed, a password-protected
+// ECU, and an ECU with no matching definition.
+const { AppModel } = await src('app-model.ts');
+const { simSerial } = await src('ecu-sim.ts');
+const sleep = (ms) => new Promise((r) => realSetTimeout(r, ms));
+const realSetTimeout = globalThis.setTimeout;
+const until = async (c, ms = 5000) => { const t0 = Date.now(); while (!c()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await sleep(2); } };
+const timing = { handshakeMs: 300, watchdogMs: 5000, holdMs: 200, awaitMs: 300 };
+const sessionCases = [];
+function ecuEdits(m, p) {
+  const edits = [];
+  for (const t of m.allTables.values()) if (rnd() < p) {
+    const blob = [t.type, int(2), t.rows, t.cols, ...(t.rows > 1 ? f32Bytes(Array.from({ length: t.rows }, oddF32)) : []),
+      ...f32Bytes(Array.from({ length: t.cols }, oddF32)), ...f32Bytes(Array.from({ length: t.rows * t.cols }, oddF32))];
+    t.deserialize(Uint8Array.from(blob)); edits.push({ table: t.id, blob: hex(blob) });
+  }
+  for (const d of m.allDrivers.values()) if (rnd() < p) {
+    const blob = [d.numberOfConfigs, d.numberOfOutputs, d.numberOfInputs, ...f32Bytes(Array.from({ length: d.numberOfConfigs }, oddF32)),
+      ...Array.from({ length: d.numberOfOutputs + d.numberOfInputs }, () => le16(int(65536))).flat(), ...bytes(d.privSize)];
+    d.deserialize(Uint8Array.from(blob)); edits.push({ driver: d.id, blob: hex(blob) });
+  }
+  return edits;
+}
+const hostState = (app) => {
+  const m = app.model;
+  return {
+    load: app.load.kind,
+    tables: m ? [...m.allTables.values()].map((t) => [t.id, hex(t.serialize())]) : [],
+    drivers: m ? [...m.allDrivers.values()].map((d) => [d.id, hex(d.serialize())]) : [],
+    uuid: m?.ecuUuid ?? null,
+    password: m?.passwordProtectionState ? { locked: m.passwordProtectionState.locked, contact: m.passwordProtectionState.tunerContact } : null,
+  };
+};
+for (let i = 0; i < 12; i++) {
+  const xml = simXml();
+  const ecuModel = DeviceDataModel.fromXml(xml, null);
+  const kind = i % 4 === 3 ? 'password' : i % 6 === 5 ? 'noDefinition' : 'reconnect';
+  const options = { uuid: 'SIM-' + i, fwVersion: '1.' + int(9), reportMs: 1e6, engineStopped: false };
+  const ecu = new SimEcu(ecuModel, options);
+  const password = kind === 'password' ? { locked: rnd() < 0.5, temporary: rnd() < 0.5, contact: anyText(int(20)).replace(/\u0000/g, '') } : null;
+  if (password) {
+    const reply = ecu.reply.bind(ecu);
+    ecu.reply = (cls, cmd, p) => reply(cls, cmd, cls === 4 && cmd === 0 ? [...p, ...Buffer.from('PW\0')]
+      : cls === 4 && cmd === 5 ? [0, password.locked ? 1 : 0, password.temporary ? 1 : 0, ...Buffer.from(password.contact)] : p);
+  }
+  const hostXml = kind === 'noDefinition' ? xml.replace(/<Version>(\d+)<\/Version>/, (_, v) => `<Version>${Number(v) + 100}</Version>`) : xml;
+  let sent = [];
+  const handle = ecu.handle.bind(ecu);
+  ecu.handle = (f) => { if ([0, 1, 2, 4].includes(f.cls) && !(f.cls === 0 && f.cmd === 1)) sent.push(frameHex(f)); handle(f); };
+  const store = { m: new Map(), getItem(k) { return this.m.get(k) ?? null; }, setItem(k, v) { this.m.set(k, v); } };
+  const app = new AppModel({ serial: simSerial(ecu), defs: [{ name: 'sim.medef', xml: hostXml }], store, timing, lifesignMs: 1e6 });
+  const phases = [];
+  const settle = async () => {
+    await until(() => app.load.kind === 'loaded' || app.load.kind === 'notFound');
+    await sleep(30);
+    phases.push({ sent, host: hostState(app) }); sent = [];
+  };
+  const before = ecuEdits(ecuModel, 0.6);
+  await app.refreshPorts();
+  await app.connect('USB 5349:4D00'); await settle();
+  let between = [];
+  if (kind === 'reconnect') {
+    for (const p of [0, 0.4]) {
+      app.disconnect(); await until(() => !app.isConnected); await sleep(20);
+      between.push(ecuEdits(ecuModel, p)); app.load = { kind: 'idle' };
+      await app.connect('USB 5349:4D00'); await settle();
+    }
+  }
+  app.disconnect(); app.service.handler.stop(); ecu.attach(null);
+  sessionCases.push({ kind, xml, hostXml, options, password, before, between, phases });
+}
+write('session.json', sessionCases);
+
+copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
+console.log(`requests ${requests.length}, replies ${replies.length}, reporting ${reportingSeq.length}, recognition ${recognition.length}, device files ${deviceFiles.length} (${deviceFiles.filter((d) => d.error).length} rejected), calibration files ${calibrationFiles.length}, simulator sessions ${simSessions.length}, session cases ${sessionCases.length} → ${out}`);

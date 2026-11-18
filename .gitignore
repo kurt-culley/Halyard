@@ -1,0 +1,9 @@
+.dart_tool/
+build/
+pubspec.lock
+*.iml
+.idea/
+# Vendor definitions, calibrations and firmware never enter the repo.
+*.medef
+*.mecal
+*.mefw

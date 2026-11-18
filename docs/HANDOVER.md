@@ -1,0 +1,100 @@
+# Handover
+
+Read this first in a new session, then [ARCHITECTURE.md](ARCHITECTURE.md) and [behaviour-changes.md](behaviour-changes.md).
+
+## Getting the code into a new session
+
+If Kurt's Mac is linked, both projects are in `~/Desktop/rea-meite/` (`halyard/` and `me360/`). If not, he attaches
+`halyard.zip` and `me360-reference.zip`: unzip both into the same folder so `halyard/` and `me360/` are siblings. The
+reference zip leaves out `me360/defs/` (vendor files); the core tests don't need them.
+
+A cloud session needs `storage.googleapis.com` (the Dart SDK zip from `dart-archive/channels/stable/release/latest/`)
+and `pub.dev` allowed in the network settings. Node 22.18 or later runs the vector generator.
+
+## What this is
+
+Halyard is a ground-up rebuild of the ME360 tuning app in Flutter. The previous project, `../me360`, is a
+TypeScript/browser port of the vendor's Windows tool (MEITE 3.3.1), finished to full feature parity with 610 passing
+tests. That project is the **reference implementation**: its `src/` is the behaviour to port, its `docs/requirements/`
+are the functional specs, and its engine generates the golden vectors the Dart tests compare against.
+
+## Standing instructions from Kurt
+
+- Flutter, Material widgets with **no custom theming**.
+- State: **Provider**; GetX only where needed (reactive state only, never its routing or DI). Routing: **auto_route**.
+- Charts: fl_chart, plus custom painters for the log plot and live trace.
+- MVP: **full feature parity on desktop**. Mobile connects to the ECU but **reads only** (no editing). Android uses
+  native USB serial; iOS uses a Wi-Fi-to-serial bridge over TCP.
+- Product name "Halyard" is a placeholder.
+- **No vendor definitions, base maps or presets in the repo or the app.** They will come from a folder, file or URL
+  (S3 later).
+- Personal/educational, possibly a product later: avoid dependencies with commercial-use licence terms.
+- Store to flash: reviewed store by default; **automatic store is a setting, off by default**.
+- **No user-facing mention of "MEITE" or Motorsport Electronics.** Code comments may reference them.
+- The architecture must stay **slim and well considered**, down to file and folder structure.
+- Carried over from the earlier project: no VM in any capacity, no .NET oracle, don't hit the vendor's FTP server.
+- Kurt has only an Intel MacBook (8 GB). Sync work to `~/Desktop/rea-meite/halyard` on his Mac when linked.
+
+## State (18 Nov 2026, end of the second session)
+
+Step 1 of the build order (scaffold and core read path) is done in the core, apart from CI hosting. The core compiles
+and its checks pass: Dart SDK 3.14.1, `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 55 tests
+pass in about 5 s (one more skips until `HALYARD_DEFS` is set), and both rule checks pass. `node tool/export_vectors.mjs`
+regenerates every vector file byte for byte.
+
+| Done and tested against the TypeScript engine | Files |
+|---|---|
+| Wire: framing, all message classes, reply factory | `core/lib/src/wire/` |
+| Link: transport interface, channel, connection, read-only policy | `core/lib/src/link/` |
+| Definition and calibration reading, blobs, hashes | `core/lib/src/definition/`, `core/lib/src/calibration/calibration.dart` |
+| `.mecal` writer, backup file name | `core/lib/src/calibration/calibration_file.dart` |
+| ECU simulator and its transport | `core/lib/src/sim/` |
+| Session read path: identify, definition, password state, hashes, reads, reporting and lifesign | `core/lib/src/session/session.dart` |
+| Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
+
+### What the second session changed and found
+
+- **First compile.** Only small fixes: a closure that swallowed a cascade in a test, a set comparison in the requests
+  test, and the fake transport's `close()` under `fake_async` (it settles on a root-zone future that the fake clock
+  never flushes). `analysis_options.yaml` now sets the formatter width (120), and the SDK floor is `^3.7.0`.
+- **Reader bugs the writer vectors exposed**, all now matching the original:
+  - package:xml doesn't do XML end-of-line or attribute-value normalisation. `normaliseXmlSource` does both before
+    parsing.
+  - The original's arrays and parameters skip a value equal to the stored one, and 0 equals -0, so a zero keeps its
+    sign. That shows in saved files and hashes. `assignFloats` does this when reading files and applying blobs.
+  - `LinkDef.textValues` is null when the file has no list, so an empty list survives a save.
+  - `parseTableBlob` and `parseDriverBlob` apply over the current values. A curve's wire form has no row axis, which
+    zeroed it before.
+- **Simulator.** Ported except the fault log (class 9 gets no answer, fault-bit links read 0) and the CAN ids reserved
+  by the driver's own streams (2/3 answers with none). Both wait for `core/faults` and `core/can`. It has a password
+  option the TypeScript simulator lacks; the generator patches the TypeScript simulator the same way. Table-data writes
+  assume one float per offset; the wire form doesn't say, and the editors only send one.
+- **Session.** Reacts to every successful identity reply. On the same kind of ECU it confirms the overall hash or reads
+  only what changed; otherwise it looks up a definition and reads everything. Each time it comes online it takes a
+  snapshot of the calibration. Two behaviour changes are recorded in [behaviour-changes.md](behaviour-changes.md).
+  Reporting state goes through `Session.pauseReporting` and `resumeReporting`, so the lifesign follows it.
+- **Vectors.** Three new files: `calibration_files.json` (60 rich synthetic files, saved, then edited through wire
+  blobs and saved again), `simulator.json` (25 scripted sessions) and `session.json` (12 connect scenarios run by the
+  TypeScript app model with real timers). The generator pins `TZ=UTC` and stubs timers only for the simulator section.
+  The vectors total about 15 MB.
+- The TypeScript reference suite passes apart from 22 tests that read `me360/defs/`, which the reference zip leaves out.
+
+## Next
+
+1. **CI.** The checks exist and the README lists the commands; nothing runs them automatically yet (needs Kurt's call
+   on where the repo and CI live).
+2. **Sending a calibration**: apply a `.mecal` to the ECU's definition (`calibration.ts` F01, `load-calibration.ts`)
+   and send it (`message-handler.ts` K01–K04). This is the first write path, so it goes with the write gate.
+3. **Live data**: report decoding into the ring-buffer store in `core/live`, fed from the session's channel.
+4. **The 610 TypeScript tests one for one**: so far the Dart tests cover the ported units through vectors and
+   scenarios, not test by test.
+5. **Wire tests in Chrome** (`dart test -p chrome`): the vector tests read files with `dart:io` and are VM-only, so the
+   browser run needs the vectors loaded another way first.
+6. Then the Flutter app scaffold (`flutter create`), step 2 of the build order.
+
+## Open questions for the real ECU (bench test)
+
+- Is the USB port native CDC (as static analysis suggested) or a USB-to-UART chip? Record VID/PID.
+- Which baud rate connects?
+- Does a flash store disturb a running engine? (Decides whether auto-store must wait for idle.)
+- Real live-data report rate.

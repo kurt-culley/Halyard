@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.14.1
+      - name: Dependencies
+        run: dart pub get
+        working-directory: core
+      - name: Analyze
+        run: dart analyze --fatal-infos
+        working-directory: core
+      - name: Format
+        run: dart format --set-exit-if-changed .
+        working-directory: core
+      - name: Tests
+        run: dart test
+        working-directory: core
+      - name: Import and folder rules
+        run: dart run tool/check_imports.dart
+      - name: Branding
+        run: dart run tool/check_branding.dart
