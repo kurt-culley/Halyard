@@ -53,6 +53,7 @@ regenerates every vector file byte for byte.
 | Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
 | Live data store | `core/lib/src/live/` |
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
+| Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
 
 ### What the second session changed and found
 

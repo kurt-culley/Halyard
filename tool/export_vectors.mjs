@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -662,6 +662,19 @@ write('live.json', liveCases);
   }
   globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
   write('sim_faults.json', sessions);
+}
+
+// ---------------------------------------------------------------- units: raw-value conversions
+{
+  const U = await src('units.ts');
+  const units = Object.keys(U.UNITS);
+  const values = [0, -0, 1, -1, 0.5, 100, 4095, 32767, 64999, 65000, 65001, 65535, 70000, -70000, 1e30, -1e30, NaN, Infinity, -Infinity,
+    ...Array.from({ length: 30 }, () => oddF32())];
+  const cases = [];
+  for (const unit of units) for (const v of values) for (const check of [false, true]) {
+    cases.push({ unit, v: hex(f32(v)), check, from: hex(f32(U.fromRaw(unit, v, check))), to: hex(f32(U.toRaw(unit, v, check))) });
+  }
+  write('units.json', cases);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

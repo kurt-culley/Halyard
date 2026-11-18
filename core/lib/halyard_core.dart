@@ -21,6 +21,7 @@ export 'src/sim/sim_ecu.dart';
 export 'src/sim/sim_faults.dart';
 export 'src/sim/sim_transport.dart';
 export 'src/sim/sim_trigger.dart';
+export 'src/units/units.dart';
 export 'src/wire/bytes.dart' show PayloadError, decodeUtf8, fromHex, toHex;
 export 'src/wire/framing.dart';
 export 'src/wire/message_factory.dart';
