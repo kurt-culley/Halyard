@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -372,6 +372,34 @@ function richXml() {
       maybe(0.9, () => el('inputLinkIds', ids(ni))) + maybe(0.3, () => linkCfgXml('InputLinksConfigs')) + maybe(0.3, () => linkCfgXml('OutputLinkConfigs')));
   });
   return '﻿<?xml version="1.0" encoding="utf-8"?>\r\n<ecu>\r\n' + parts.join('\r\n') + `\r\n<links>${links.join('\n')}</links>\n<drivers>${drivers.join('\n')}</drivers>\n<tables>${tables.join('\n')}</tables>\n</ecu>`;
+}
+
+// ---------------------------------------------------------------- link values: value text, bounds and feedback states
+{
+  const { DataLinkFeedbackModel, acknowledged } = await src('status-strip.ts');
+  const cases = [];
+  for (let c = 0; c < 30; c++) {
+    const xml = richXml();
+    let m;
+    try { m = DeviceDataModel.fromXml(xml, null); } catch { continue; }
+    const links = [...m.allDataLinks.values()].map((l) => {
+      const fb = new DataLinkFeedbackModel({ model: { getDataLinkModelForSource: () => l }, connected: true }, 'k', '', '');
+      const steps = [];
+      let ticks = 1n;
+      for (let k = 0; k < 25; k++) {
+        if (rnd() < 0.15) { fb.acknowledgeFeedback(); steps.push({ ack: true }); continue; }
+        const v = Math.fround(rnd() < 0.5 ? oddF32() : pick([0, 1, 2, 5, 0.95, 1.05, -1, 100, 0.04, 0.05, 0.15, 1.25]) + (rnd() < 0.3 ? (rnd() - 0.5) * 0.2 : 0));
+        l.setValue(ticks++, v);
+        const decimals = int(4);
+        const chosen = fb.getFeedback();
+        steps.push({ value: hex(f32(v)), decimals, text: l.getValueString(decimals), forValue: l.getTextForValue(v), out: l.valueOutOfBounds(),
+          feedback: (l.feedbacks ?? []).indexOf(chosen), acknowledged: chosen.constraints ? acknowledged(chosen) : null });
+      }
+      return { id: l.id, nameWithUnit: l.nameWithUnit, steps };
+    });
+    cases.push({ xml, links });
+  }
+  write('link_values.json', cases);
 }
 
 const f32Bytes = (vals) => vals.flatMap(f32);

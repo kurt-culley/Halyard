@@ -24,6 +24,7 @@ export 'src/firmware/firmware_file.dart';
 export 'src/link/channel.dart';
 export 'src/link/connection.dart';
 export 'src/link/transport.dart';
+export 'src/live/link_values.dart';
 export 'src/live/live_store.dart';
 export 'src/logs/live_recording.dart';
 export 'src/logs/log_review.dart';

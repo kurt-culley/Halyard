@@ -15,7 +15,8 @@ class _File implements TextFileSink {
   void close() {}
 }
 
-String _f32Hex(double v) => toHex((Float32List(1)..[0] = v).buffer.asUint8List());
+/// NaN as one pattern: its sign bit differs between platforms.
+String _f32Hex(double v) => v.isNaN ? '0000c07f' : toHex((Float32List(1)..[0] = v).buffer.asUint8List());
 
 Future<void> main() async {
   final v = (await loadVectors('live_recordings.json')).first as Map<String, dynamic>;
@@ -87,7 +88,8 @@ Future<void> main() async {
             [
               c[0],
               [
-                for (final x in (c[1] as List<dynamic>).cast<List<dynamic>>()) [x[0], x[1]],
+                for (final x in (c[1] as List<dynamic>).cast<List<dynamic>>())
+                  [x[0], (x[1] as String).endsWith('c0ff') ? '0000c07f' : x[1]],
               ],
             ],
         ],

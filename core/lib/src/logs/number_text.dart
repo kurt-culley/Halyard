@@ -137,13 +137,28 @@ String formatFixed(double v, int decimals, {bool isFloat = true}) {
   if (v == double.infinity) return 'Infinity';
   if (v == double.negativeInfinity) return '-Infinity';
   RangeError.checkValueInInterval(decimals, 0, 99, 'decimals');
+  final (neg, intPart, frac) = _fixed(v, decimals, isFloat ? 7 : 15, 0);
+  return '${neg ? '-' : ''}$intPart${decimals > 0 ? '.$frac' : ''}';
+}
+
+/// A float with `ToString(prefix + "#0.0# %")`: times 100 with one or two decimals.
+String formatPercent(double v, {String prefix = ''}) {
+  if (v.isNaN) return 'NaN';
+  if (v == double.infinity) return 'Infinity';
+  if (v == double.negativeInfinity) return '-Infinity';
+  final (neg, intPart, frac) = _fixed(v, 2, 7, 2);
+  return '${neg ? '-' : ''}$prefix$intPart.${frac[1] == '0' ? frac[0] : frac} %';
+}
+
+/// The sign, integer part and [decimals] decimals of [v] times 10^[shift], from its [precision] significant digits.
+(bool, String, String) _fixed(double v, int decimals, int precision, int shift) {
   var neg = v < 0 || (v == 0 && v.isNegative);
   var d = '';
   var scale = 0;
   if (v != 0) {
-    final parts = v.abs().toStringAsExponential((isFloat ? 7 : 15) - 1).split('e');
+    final parts = v.abs().toStringAsExponential(precision - 1).split('e');
     d = parts[0].replaceAll('.', '').replaceFirst(RegExp(r'0+$'), '');
-    scale = int.parse(parts[1]) + 1;
+    scale = int.parse(parts[1]) + 1 + shift;
   }
   // Round at the decimal, half away from zero on the digit string.
   final pos = scale + decimals;
@@ -173,5 +188,5 @@ String formatFixed(double v, int decimals, {bool isFloat = true}) {
     final k = scale + i;
     frac.write(k >= 0 && k < d.length ? d[k] : '0');
   }
-  return '${neg ? '-' : ''}$intPart${decimals > 0 ? '.$frac' : ''}';
+  return (neg, intPart, frac.toString());
 }
