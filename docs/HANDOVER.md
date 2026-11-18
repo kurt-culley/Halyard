@@ -40,7 +40,7 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 The core covers every decision-free module of the reference engine that the build order needs before the app: reading,
 the session, live data and playback, logs, faults, CAN, import, presets, settings pages, table editing, the tuning
 assistant and firmware files. What's left in the core waits on the write gate, on flashing, or on a question below.
-Dart SDK 3.14.1; `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 125 tests pass in about 13 s
+Dart SDK 3.14.1; `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 126 tests pass in about 13 s
 on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), and both rule checks pass.
 `node tool/export_vectors.mjs` regenerates every vector file byte for byte. CI is green on every push.
 
@@ -65,6 +65,7 @@ on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), an
 | Fuel tuning assistant: analysis and suggestions from live or CSV samples (applying them waits for the write gate) | `core/lib/src/analysis/tuning_assistant.dart` |
 | Live value text (listed texts, trim and plain percentages, fixed decimals), out-of-bounds, name with unit, and each link's feedback states with acknowledgement | `core/lib/src/live/link_values.dart` |
 | Playback in the live store: pause, seek back, go live (reports kept aside meanwhile), load a recording; the strip's buttons and timer are app work | `core/lib/src/live/live_store.dart` |
+| Trigger logger: reported edges into a square-wave trace (missed edges filled in), `.metlg` text both ways, edges between two times and around a time; starting and stopping are session requests for the app to send | `core/lib/src/logs/trigger_log.dart` |
 | Live-data recordings: rolling CSV files of every report while a folder is set, read back for playback (times kept as milliseconds so they stay exact on the web) | `core/lib/src/logs/live_recording.dart` |
 | Settings pages: rows and sections, units by preference, read-only by view constraint, typed values, the checks before a change (duplicates in a group, range, idle duties, Nissan SR trigger and phasing) and link choices, all as typed results. Applying a change waits for the write gate. The unlock warning names the vendor, so its wording is the app's | `core/lib/src/calibration/driver_settings.dart` |
 | Table editing: decimals per table (the user's choice, AFR/lambda, VE, increment), the formula box, pasted cell blocks, .NET custom decimal text; interpolating axes, rows and columns (sparing tuned cells), the live position in a map and its offset from the cell centre, smoothing and dragging neighbours by radius. The decimals choice and smoothing radius are stored however the app keeps settings, not as the original's XML strings; the heat colours are left to the theme | `core/lib/src/calibration/table_editing.dart` |

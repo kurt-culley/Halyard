@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values,table_operations}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values,table_operations,trigger_log}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -785,6 +785,48 @@ write('live.json', liveCases);
     cases.push({ rows, cols, increment: hex(f32(t.incrementValue)), start, steps });
   }
   write('table_operations.json', cases);
+}
+
+// ---------------------------------------------------------------- trigger logger: events into points, .metlg text, edges
+{
+  const TLm = await src('trigger-logger.ts');
+  const cases = [];
+  for (let c = 0; c < 20; c++) {
+    const m = new TLm.TriggerLoggerModel({ send() {}, setReportingState() {}, setDeviceChannelTimeout() {} });
+    const steps = [];
+    if (rnd() < 0.7) { const freq = pick([1, 1000, 1000000, 3, 16000000]); m.onResponse(1, { status: 0, enabled: true, freq }); steps.push({ op: 'state', status: 0, freq }); }
+    for (let k = 0; k < 12; k++) {
+      const r = rnd();
+      if (r < 0.06) { m.clear(); steps.push({ op: 'clear' }); if (rnd() < 0.8) { m.onResponse(1, { status: 0, enabled: true, freq: 1000 }); steps.push({ op: 'state', status: 0, freq: 1000 }); } continue; }
+      if (r < 0.15) { const freq = pick([1, 1000, 7, 1000000]); const status = rnd() < 0.8 ? 0 : 1; m.onResponse(1, { status, enabled: true, freq }); steps.push({ op: 'state', status, freq }); continue; }
+      const entries = Array.from({ length: int(40) }, () => ({ channel: rnd() < 0.9 ? int(2) : int(5), state: rnd() < 0.5, gap: rnd() < 0.1 ? 0 : 1 + int(5000), syncState: int(5) }));
+      m.onLoggingReported(entries);
+      steps.push({ op: 'report', entries: entries.map((e) => [e.channel, e.state, e.gap, e.syncState]), points: m.items.length,
+        tail: m.items.slice(-5).map((p) => [String(p.timestamp), p.syncState, p.isSimulated, p.values]) });
+    }
+    const items = m.items;
+    const all = m.save();
+    const ts = items.map((p) => p.timestamp);
+    const lo = ts.length ? ts[int(ts.length)] : 0, hi = ts.length ? ts[int(ts.length)] : 0;
+    const part = m.save(Math.min(lo, hi), Math.max(lo, hi));
+    const areas = Array.from({ length: 4 }, () => { const ch = int(3); const a = ts.length ? pick(ts) : 0, b = ts.length ? pick(ts) : 1; return [ch, String(Math.min(a, b)), String(Math.max(a, b)), TLm.areaInfo(items, ch, Math.min(a, b), Math.max(a, b))]; });
+    const spans = Array.from({ length: 4 }, () => { const ch = int(2); const x = ts.length ? pick(ts) + (rnd() - 0.5) * 0.001 : 0; const e = TLm.edgeSpan(items, ch, x); return [ch, String(x), e && [String(e.from), String(e.to), e.text]]; });
+    // loading: the saved text, sometimes damaged
+    let text = rnd() < 0.5 ? all : part;
+    const mut = rnd() * 2;
+    if (mut < 0.1) text = text.replace('Timestamp', 'Time');
+    else if (mut < 0.15) text = text.replace(',0,1,', ',Crank,CamA,');
+    else if (mut < 0.2) text = text.replace(',4,', ',Events,');
+    else if (mut < 0.25) text = text.replace(/\r\n([^\r\n]*)\r\n/, '\r\n$1,\r\n').replace(/,1\r\n/, ',x\r\n');
+    else if (mut < 0.3) text = text.replace('SyncState,', '');
+    else if (mut < 0.33) text = '';
+    const l = new TLm.TriggerLoggerModel({ send() {}, setReportingState() {}, setDeviceChannelTimeout() {} });
+    let loaded;
+    try { l.load(text); loaded = { points: l.items.map((p) => [String(p.timestamp), p.syncState, p.isSimulated, p.values.map(String)]), enabled: l.channelList.map((ch) => ch.enabled) }; }
+    catch { loaded = { error: true, enabled: l.channelList.map((ch) => ch.enabled) }; }
+    cases.push({ steps, saved: all, part: [String(Math.min(lo, hi)), String(Math.max(lo, hi)), part], areas, spans, load: { text, ...loaded } });
+  }
+  write('trigger_log.json', cases);
 }
 
 // ---------------------------------------------------------------- playback: pausing, seeking back and going live again
