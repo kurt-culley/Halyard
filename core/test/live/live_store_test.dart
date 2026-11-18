@@ -1,6 +1,3 @@
-@TestOn('vm')
-library;
-
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -13,8 +10,8 @@ String _bits(double v) => toHex((ByteData(4)..setFloat32(0, v, Endian.little)).b
 
 ReportReply _report(String hex) => MessageFactory().create(frameFromHex(hex))! as ReportReply;
 
-void main() {
-  final cases = loadVectors('live.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  final cases = (await loadVectors('live.json')).cast<Map<String, dynamic>>();
 
   test('values and history follow the TypeScript handler (${cases.length} cases)', () {
     for (final (i, c) in cases.indexed) {

@@ -38,8 +38,8 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 ## State (18 Nov 2026, end of the second session)
 
 Step 1 of the build order (scaffold and core read path) is done in the core, apart from CI hosting. The core compiles
-and its checks pass: Dart SDK 3.14.1, `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 55 tests
-pass in about 5 s (one more skips until `HALYARD_DEFS` is set), and both rule checks pass. `node tool/export_vectors.mjs`
+and its checks pass: Dart SDK 3.14.1, `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 60 tests
+pass in about 5 s on the VM and in about a minute in Chrome (one more skips until `HALYARD_DEFS` is set), and both rule checks pass. `node tool/export_vectors.mjs`
 regenerates every vector file byte for byte.
 
 | Done and tested against the TypeScript engine | Files |
@@ -86,11 +86,14 @@ regenerates every vector file byte for byte.
    cloud session attaches it with `add_repo` (push access) and clones it; it no longer needs the zip.
 2. **Sending a calibration**: apply a `.mecal` to the ECU's definition (`calibration.ts` F01, `load-calibration.ts`)
    and send it (`message-handler.ts` K01–K04). This is the first write path, so it goes with the write gate.
-3. **Live data**: report decoding into the ring-buffer store in `core/live`, fed from the session's channel.
+3. **Live data: done.** `core/lib/src/live/live_store.dart`: a ring buffer per link (1200 samples), latest value,
+   staleness (not in the latest report), version counter and dirty bits. History follows the original handler; vectors
+   in `live.json`. The session creates a store with each definition and feeds it reports.
 4. **The 610 TypeScript tests one for one**: so far the Dart tests cover the ported units through vectors and
    scenarios, not test by test.
-5. **Wire tests in Chrome** (`dart test -p chrome`): the vector tests read files with `dart:io` and are VM-only, so the
-   browser run needs the vectors loaded another way first.
+5. **Chrome: done.** The vector loader reads files on the VM and fetches them in a browser; every test except the
+   `HALYARD_DEFS` check (`real_definitions_test.dart`) runs in Chrome too, and CI runs both. Locally as root, Chrome
+   needs `--no-sandbox`: point `CHROME_EXECUTABLE` at a wrapper script that adds it.
 6. Then the Flutter app scaffold (`flutter create`), step 2 of the build order.
 
 ## Open questions for the real ECU (bench test)

@@ -1,6 +1,3 @@
-@TestOn('vm')
-library;
-
 import 'dart:typed_data';
 
 import 'package:halyard_core/halyard_core.dart';
@@ -10,8 +7,8 @@ import 'package:test/test.dart';
 
 import '../support/vectors.dart';
 
-void main() {
-  final files = loadVectors('calibration_files.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  final files = (await loadVectors('calibration_files.json')).cast<Map<String, dynamic>>();
 
   test('saves loaded files exactly as the TypeScript writer does (${files.length} files)', () {
     for (final (i, v) in files.indexed) {

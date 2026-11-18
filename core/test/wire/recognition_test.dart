@@ -1,14 +1,11 @@
-@TestOn('vm')
-library;
-
 import 'package:halyard_core/halyard_core.dart';
 import 'package:test/test.dart';
 
 import '../support/vectors.dart';
 
-void main() {
-  test('recognition, reply matching and ECU requests match the TypeScript engine', () {
-    final vectors = loadVectors('recognition.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  test('recognition, reply matching and ECU requests match the TypeScript engine', () async {
+    final vectors = (await loadVectors('recognition.json')).cast<Map<String, dynamic>>();
     for (final (i, v) in vectors.indexed) {
       final f = frameFromHex(v['frame'] as String);
       final factory = MessageFactory();

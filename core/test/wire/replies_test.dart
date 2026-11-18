@@ -1,14 +1,11 @@
-@TestOn('vm')
-library;
-
 import 'package:halyard_core/halyard_core.dart';
 import 'package:test/test.dart';
 
 import '../support/vectors.dart';
 
-void main() {
-  test('parses replies of classes 1–9 exactly as the TypeScript engine does', () {
-    final vectors = loadVectors('replies.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  test('parses replies of classes 1–9 exactly as the TypeScript engine does', () async {
+    final vectors = (await loadVectors('replies.json')).cast<Map<String, dynamic>>();
     for (final (i, v) in vectors.indexed) {
       final f = frameFromHex(v['frame'] as String);
       final got = MessageFactory().create(f);
@@ -16,8 +13,8 @@ void main() {
     }
   });
 
-  test('decodes live-data sequences through one factory, keeping the layout between frames', () {
-    final vectors = loadVectors('reporting.json').cast<Map<String, dynamic>>();
+  test('decodes live-data sequences through one factory, keeping the layout between frames', () async {
+    final vectors = (await loadVectors('reporting.json')).cast<Map<String, dynamic>>();
     for (final (i, v) in vectors.indexed) {
       final factory = MessageFactory();
       final frames = (v['frames'] as List<dynamic>).cast<String>();

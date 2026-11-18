@@ -1,6 +1,3 @@
-@TestOn('vm')
-library;
-
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -26,8 +23,8 @@ import '../support/vectors.dart';
   return (ecu: ecu, out: out, setClock: (ms) => now = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true));
 }
 
-void main() {
-  final sessions = loadVectors('simulator.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  final sessions = (await loadVectors('simulator.json')).cast<Map<String, dynamic>>();
 
   test('answers scripted sessions exactly as the TypeScript simulator (${sessions.length} sessions)', () {
     fakeAsync((_) {

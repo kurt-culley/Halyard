@@ -2,12 +2,14 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:halyard_core/halyard_core.dart';
 
-List<dynamic> loadVectors(String name) => jsonDecode(File('test/vectors/$name').readAsStringSync()) as List<dynamic>;
+import 'vector_source_io.dart' if (dart.library.js_interop) 'vector_source_web.dart';
+
+/// A vector file, on the VM or in a browser.
+Future<List<dynamic>> loadVectors(String name) async => jsonDecode(await readVectorText(name)) as List<dynamic>;
 
 /// Bytes as "hex:..", non-finite numbers as strings, recursively.
 Object? norm(Object? v) => switch (v) {

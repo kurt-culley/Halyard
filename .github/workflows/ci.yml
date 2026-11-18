@@ -21,8 +21,11 @@ jobs:
       - name: Format
         run: dart format --set-exit-if-changed .
         working-directory: core
-      - name: Tests
+      - name: Tests (VM)
         run: dart test
+        working-directory: core
+      - name: Tests (Chrome)
+        run: dart test -p chrome
         working-directory: core
       - name: Import and folder rules
         run: dart run tool/check_imports.dart

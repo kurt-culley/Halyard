@@ -1,6 +1,3 @@
-@TestOn('vm')
-library;
-
 import 'package:halyard_core/halyard_core.dart';
 import 'package:test/test.dart';
 
@@ -59,8 +56,8 @@ final _builders = <String, Frame Function(List<dynamic> a)>{
   'firmware.enterBootloader': (a) => enterBootloaderRequest(),
 };
 
-void main() {
-  final vectors = loadVectors('requests.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  final vectors = (await loadVectors('requests.json')).cast<Map<String, dynamic>>();
 
   test('every builder in the vectors exists here', () {
     expect(_builders.keys.toSet(), containsAll(vectors.map((v) => v['name']).toSet()));

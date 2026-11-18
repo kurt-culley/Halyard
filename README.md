@@ -32,7 +32,7 @@ HALYARD_DEFS=/path/to/definitions dart test
 From the repository root, as CI will run them:
 
 ```sh
-(cd core && dart analyze --fatal-infos && dart format --set-exit-if-changed . && dart test)
+(cd core && dart analyze --fatal-infos && dart format --set-exit-if-changed . && dart test && dart test -p chrome)
 dart run tool/check_imports.dart
 dart run tool/check_branding.dart
 ```

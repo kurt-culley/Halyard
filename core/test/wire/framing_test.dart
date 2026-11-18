@@ -1,6 +1,3 @@
-@TestOn('vm')
-library;
-
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -9,15 +6,15 @@ import 'package:test/test.dart';
 
 import '../support/vectors.dart';
 
-void main() {
+Future<void> main() async {
   test('encodes frames exactly as captured from the original tool', () {
     expect(toHex(encodeFrame(getEcuInfoRequest())), '4d4500000004000408');
     expect(toHex(encodeFrame(getTableRequest(4100))), '4d4502000001010410161f');
     expect(toHex(encodeFrame(storeTableRequest(4100))), '4d45020000010604101b2e');
   });
 
-  test('decodes 5,000 fuzzed streams exactly as the original readers did, whatever the chunking', () {
-    final cases = loadVectors('framing_fuzz.json');
+  test('decodes 5,000 fuzzed streams exactly as the original readers did, whatever the chunking', () async {
+    final cases = await loadVectors('framing_fuzz.json');
     final rnd = Random(12345);
     for (final (i, c as Map<String, dynamic>) in cases.indexed) {
       final stream = fromHex(c['stream'] as String);
@@ -36,8 +33,8 @@ void main() {
     }
   });
 
-  test('a decoded frame re-encodes to the same bytes', () {
-    final cases = loadVectors('framing_fuzz.json');
+  test('a decoded frame re-encodes to the same bytes', () async {
+    final cases = await loadVectors('framing_fuzz.json');
     for (final c in cases.take(500).cast<Map<String, dynamic>>()) {
       final d = FrameDecoder();
       for (final f in d.push(fromHex(c['stream'] as String))) {

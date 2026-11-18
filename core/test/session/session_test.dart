@@ -1,6 +1,3 @@
-@TestOn('vm')
-library;
-
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -75,8 +72,8 @@ void _apply(SimEcu ecu, List<dynamic> edits) {
   return (ecu: ecu, connection: connection, session: session, sent: sent);
 }
 
-void main() {
-  final cases = loadVectors('session.json').cast<Map<String, dynamic>>();
+Future<void> main() async {
+  final cases = (await loadVectors('session.json')).cast<Map<String, dynamic>>();
 
   test('connects, reads and reconnects as the TypeScript app did (${cases.length} cases)', () {
     for (final (i, v) in cases.indexed) {
