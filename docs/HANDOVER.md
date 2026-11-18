@@ -81,8 +81,10 @@ regenerates every vector file byte for byte.
 
 ## Next
 
-1. **CI.** The checks exist and the README lists the commands; nothing runs them automatically yet (needs Kurt's call
-   on where the repo and CI live).
+1. **Repo and CI.** Kurt chose a private GitHub repo, `kurt-culley/halyard`, with GitHub Actions
+   (`.github/workflows/ci.yml` runs analyze, format, tests and both rule checks). A cloud session can't create
+   repositories, so Kurt creates the empty repo; then `add_repo` with push access and push `main`. The first commit
+   exists locally in the zip's `.git`.
 2. **Sending a calibration**: apply a `.mecal` to the ECU's definition (`calibration.ts` F01, `load-calibration.ts`)
    and send it (`message-handler.ts` K01–K04). This is the first write path, so it goes with the write gate.
 3. **Live data**: report decoding into the ring-buffer store in `core/live`, fed from the session's channel.
