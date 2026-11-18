@@ -17,6 +17,7 @@ export 'src/definition/xml_convert.dart' show XmlValueError;
 export 'src/faults/fault_codes.dart';
 export 'src/faults/fault_log_reader.dart';
 export 'src/faults/fault_records.dart';
+export 'src/firmware/firmware_file.dart';
 export 'src/link/channel.dart';
 export 'src/link/connection.dart';
 export 'src/link/transport.dart';

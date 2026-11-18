@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -1083,6 +1083,62 @@ write('live.json', liveCases);
     return { headers, candidates: cand, index: TA.findCsvColumn(log, cand) };
   });
   write('tuning_assistant.json', [{ cases, columns }]);
+}
+
+// ---------------------------------------------------------------- firmware files: Intel HEX and .mefw (read side)
+{
+  const FW = await src('firmware.ts');
+  const { DeviceDataInformationModel: Info } = await src('device-model.ts');
+  const h2 = (v) => (v & 0xff).toString(16).toUpperCase().padStart(2, '0');
+  const record = (type, addr, data) => {
+    const body = [data.length, (addr >> 8) & 0xff, addr & 0xff, type, ...data];
+    const sum = (0x100 - (body.reduce((a, b) => a + b, 0) & 0xff)) & 0xff;
+    return ':' + body.map(h2).join('') + h2(sum);
+  };
+  function hexText() {
+    const lines = [];
+    let addr = int(0x8000);
+    if (rnd() < 0.4) lines.push(record(4, 0, [0, int(4)]));
+    if (rnd() < 0.2) lines.push(record(2, 0, [int(256), 0]));
+    for (let k = 0; k < 1 + int(12); k++) {
+      const len = rnd() < 0.9 ? 16 : int(40);
+      lines.push(record(0, addr & 0xffff, bytes(len)));
+      addr += rnd() < 0.8 ? len : len + 1 + int(64);
+      if (rnd() < 0.05) lines.push(record(3, 0, bytes(4)));
+      if (rnd() < 0.05) lines.push(record(5, 0, bytes(4)));
+      if (rnd() < 0.05) lines.push(record(4, 0, [0, int(4)]));
+    }
+    if (rnd() < 0.85) lines.push(record(1, 0, []));
+    let t = lines.join(pick(['\r\n', '\n']));
+    if (rnd() < 0.1) t = t.toLowerCase();
+    if (rnd() < 0.05) t = t.replace(/:..../, ':ZZ00');
+    if (rnd() < 0.05) t = 'junk before\n' + t;
+    if (rnd() < 0.03) t = t.replace(/:([0-9A-F]{6})00/, ':$106');
+    return t;
+  }
+  const regions = (img) => img.regions.map((r) => [r.startAddress, r.last, hex(r.data), r.paddingBytes, r.crc]);
+  const hexes = Array.from({ length: 80 }, () => {
+    const text = hexText();
+    try { return { text, regions: regions(FW.FWImage.fromHex(text)) }; } catch { return { text, error: true }; }
+  });
+  const files = [];
+  for (const h of hexes) {
+    if (h.error) continue;
+    const info = new Info('ME360', pick(['V2D', 'GENERIC']), String(int(99)), '1.' + int(9));
+    const def = Uint8Array.from(bytes(int(200)));
+    const comments = rnd() < 0.2 ? 'Release ' + int(9) : '';
+    let bin = FW.writeFWImageFile(h.text, def, comments, info);
+    if (rnd() < 0.1) bin = bin.slice(0, bin.length - 1 - int(10));
+    if (rnd() < 0.05) bin[0] = 0x58;
+    let read;
+    try {
+      const f = FW.readFWImageFile(bin);
+      read = { info: [f.fwInformation.productName, f.fwInformation.modelName, f.fwInformation.version, f.fwInformation.fwVersion], comments: f.comments,
+        size: f.firmwareData.size, regions: regions(f.firmwareData), definition: hex(f.openDefinition()) };
+    } catch { read = { error: true }; }
+    files.push({ file: hex(bin), read });
+  }
+  write('firmware.json', [{ hexes, files }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
