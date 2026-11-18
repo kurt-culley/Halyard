@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -969,6 +969,30 @@ write('live.json', liveCases);
     } catch { return { text, error: true }; }
   });
   write('dbc.json', [{ numbers, files }]);
+}
+
+// ---------------------------------------------------------------- PC logging: "F" number text, header and lines
+{
+  const NF = await src('netfmt.ts');
+  const PC = await src('pc-logging.ts');
+  const values = [0, -0, 0.004, -0.004, 0.005, -0.005, 0.015, 1.005, 2.675, 123456.789, 1e7, -1e-9, 99.995, 0.125, 1e20, NaN, Infinity, -Infinity,
+    ...Array.from({ length: 50 }, () => (rnd() - 0.5) * 10 ** (int(14) - 6))];
+  const fixed = [];
+  for (const v of values) for (const decimals of [0, 1, 2, 3]) {
+    fixed.push({ v: hex([...new Uint8Array(Float64Array.of(v).buffer)]), decimals, f: NF.formatFixed(Math.fround(v), decimals), d: NF.formatFixed(v, decimals, false) });
+  }
+  const lines = Array.from({ length: 40 }, () => {
+    const delimiter = pick([',', ';', '\t']);
+    const links = Array.from({ length: int(6) }, (_, i) => ({ id: i + 1, name: rnd() < 0.2 ? null : 'Link ' + i, value: Math.fround(oddF32()) }));
+    const cfg = { defaultConfig: { delimiter, channels: [] } };
+    let nowMs = 1_000_000;
+    const model = Object.create(PC.PcLoggingModel.prototype);
+    Object.assign(model, { clock: { now: () => new Date(nowMs) }, startMs: 1_000_000 - int(100000), addMarkerOnNextTimerTick: rnd() < 0.3 });
+    const marker = model.addMarkerOnNextTimerTick;
+    return { delimiter, names: links.map((l) => l.name), values: links.map((l) => hex(f32(l.value))), elapsedMs: nowMs - model.startMs, marker,
+      header: PC.headerLine(cfg, links), line: model.getLine(cfg, links) };
+  });
+  write('pc_logging.json', [{ fixed, lines }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

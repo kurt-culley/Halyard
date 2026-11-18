@@ -85,3 +85,51 @@ int? tryNetInt32(String s) {
     return null;
   }
 }
+
+// ---------------------------------------------------------------- "F" (fixed decimals)
+
+/// `ToString("F<decimals>")` of a float ([isFloat]) or a double: the value reduced to 7 (or 15) significant digits,
+/// then rounded half away from zero at the decimal; a result of zero has no minus sign.
+String formatFixed(double v, int decimals, {bool isFloat = true}) {
+  if (v.isNaN) return 'NaN';
+  if (v == double.infinity) return 'Infinity';
+  if (v == double.negativeInfinity) return '-Infinity';
+  RangeError.checkValueInInterval(decimals, 0, 99, 'decimals');
+  var neg = v < 0 || (v == 0 && v.isNegative);
+  var d = '';
+  var scale = 0;
+  if (v != 0) {
+    final parts = v.abs().toStringAsExponential((isFloat ? 7 : 15) - 1).split('e');
+    d = parts[0].replaceAll('.', '').replaceFirst(RegExp(r'0+$'), '');
+    scale = int.parse(parts[1]) + 1;
+  }
+  // Round at the decimal, half away from zero on the digit string.
+  final pos = scale + decimals;
+  if (d.isEmpty || pos < 0) {
+    (d, scale, neg) = ('', 0, false);
+  } else if (pos < d.length) {
+    final a = d.substring(0, pos).split('');
+    if (d.codeUnitAt(pos) >= 0x35) {
+      var i = a.length - 1;
+      while (i >= 0 && a[i] == '9') {
+        a[i--] = '0';
+      }
+      if (i < 0) {
+        a.insert(0, '1');
+        scale++;
+      } else {
+        a[i] = String.fromCharCode(a[i].codeUnitAt(0) + 1);
+      }
+    }
+    d = a.join().replaceFirst(RegExp(r'0+$'), '');
+    if (d.isEmpty) (scale, neg) = (0, false);
+  }
+  final intPart =
+      d.isEmpty || scale <= 0 ? '0' : d.substring(0, scale < d.length ? scale : d.length).padRight(scale, '0');
+  final frac = StringBuffer();
+  for (var i = 0; i < decimals; i++) {
+    final k = scale + i;
+    frac.write(k >= 0 && k < d.length ? d[k] : '0');
+  }
+  return '${neg ? '-' : ''}$intPart${decimals > 0 ? '.$frac' : ''}';
+}

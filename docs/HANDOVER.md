@@ -57,6 +57,7 @@ regenerates every vector file byte for byte.
 | Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids; DBC file reading | `core/lib/src/can/` |
 | Calibration import: file onto a definition, item-by-item analysis, applying a selection (incl. 16→2, 2→16, 16x16→8x8) | `core/lib/src/calibration/calibration_import.dart` |
 | Onboard logging: support, configuration, start/stop, logs, erase, format, download, CSV; .NET number text and parsing for files | `core/lib/src/logs/` |
+| PC logging: CSV header and lines, a recorder sampling the live store at its rate | `core/lib/src/logs/pc_log.dart` |
 
 ### What the second session changed and found
 
@@ -103,6 +104,10 @@ regenerates every vector file byte for byte.
 6. Then the Flutter app scaffold (`flutter create`), step 2 of the build order.
 
 ## Questions for Kurt
+
+- **PC log index (`LoggingInfo.xml`).** The original keeps an XML index of the logs it took next to them, with
+  local-time stamps (U21a X03, X04). Halyard can write and read the same file, or keep its own index in app storage.
+  Not ported until decided; the CSV itself is.
 
 - **Fault diagnostic report files.** The original saves fault reports as JSON with `"format": "meite-fault-report"`
   and refuses to open files without that marker (U13-J01 to J04). Writing it puts the vendor's name in a file users
