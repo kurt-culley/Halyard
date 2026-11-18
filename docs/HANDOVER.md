@@ -5,8 +5,8 @@ Read this first in a new session, then [ARCHITECTURE.md](ARCHITECTURE.md) and [b
 ## Getting the code into a new session
 
 Halyard lives in the private GitHub repo `kurt-culley/halyard`; clone it so `halyard/` and `me360/` are siblings. If
-Kurt's Mac is linked, both projects are also in `~/Desktop/rea-meite/`. Otherwise he attaches `me360-reference.zip`: unzip both into the same folder so `halyard/` and `me360/` are siblings. The
-reference zip leaves out `me360/defs/` (vendor files); the core tests don't need them.
+Kurt's Mac is linked, both projects are also in `~/Desktop/rea-meite/`. Otherwise he attaches `me360-reference.zip`;
+unzip it next to the clone. The reference zip leaves out `me360/defs/` (vendor files); the core tests don't need them.
 
 A cloud session needs `storage.googleapis.com` (the Dart SDK zip from `dart-archive/channels/stable/release/latest/`)
 and `pub.dev` allowed in the network settings. Node 22.18 or later runs the vector generator.
