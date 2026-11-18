@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -993,6 +993,55 @@ write('live.json', liveCases);
       header: PC.headerLine(cfg, links), line: model.getLine(cfg, links) };
   });
   write('pc_logging.json', [{ fixed, lines }]);
+}
+
+// ---------------------------------------------------------------- log review: CSV import, sessions, statistics, events
+{
+  const LR = await src('log-review.ts');
+  const f64n = (v) => (Number.isNaN(v) ? 'NaN' : hex([...new Uint8Array(Float64Array.of(v).buffer)]));
+  const cell = (v) => pick([String(v), ` ${v} `, v.toExponential(), rnd() < 0.05 ? 'x' : String(v), rnd() < 0.03 ? 'NaN' : String(v), rnd() < 0.03 ? '' : String(v)]);
+  function csvText() {
+    const d = pick([',', ';', '\t']);
+    const kind = int(3);
+    const names = Array.from({ length: 1 + int(5) }, (_, i) => pick(['RPM', 'MAP', '"Coolant, °C"', 'TPS', '', 'Lambda', 'Eng "x"', 'A' + i]));
+    const header = kind === 0 ? ['Time', ' Marker', ...names.map((n) => ' ' + n)].join(d) : kind === 1 ? ['Time', ...names].join(d) : [...names, pick(['Seconds', 'stamp'])].join(d);
+    const rows = [];
+    let t = rnd() * 100;
+    for (let k = 0; k < int(120); k++) {
+      t += rnd() < 0.05 ? -1 : 0.04 + rnd() * 0.01;
+      const vals = names.map(() => (rnd() < 0.05 ? 1e6 * (rnd() - 0.5) : Math.round((rnd() * 100) * 100) / 100));
+      const flat = rnd() < 0.3;
+      const cells = kind === 0 ? [t.toFixed(2), rnd() < 0.05 ? '1' : '0', ...vals.map((v) => (flat ? '5.00' : cell(v)))]
+        : kind === 1 ? [String(Math.fround(t)), ...vals.map(cell), ''] : [...vals.map(cell), String(t)];
+      if (rnd() < 0.05) cells.pop();
+      rows.push(rnd() < 0.03 ? '' : cells.join(d));
+    }
+    const nl = pick(['\r\n', '\n', '\r']);
+    return (rnd() < 0.2 ? '﻿' : '') + [header, ...rows].join(nl) + (rnd() < 0.5 ? nl : '');
+  }
+  const sessionJson = (s) => ({
+    channels: s.channels.map((c) => [c.name, c.sourceColumn, c.isMarker, c.displayName]),
+    times: s.sampleSet.timesSeconds.map(f64n),
+    values: s.sampleSet.channelValues.map((v) => v.map(f64n)),
+    markers: s.markers.map((m) => f64n(m.timeSeconds)),
+    warnings: s.warnings,
+  });
+  const cases = [];
+  for (let i = 0; i < 60; i++) {
+    const text = csvText();
+    let s;
+    try { s = LR.csvSession('logs/run_' + i + '.csv', text, 1, null); } catch (e) { cases.push({ text, error: true }); continue; }
+    for (const c of s.channels) if (rnd() < 0.3) { c.minValue = 0; c.maxValue = 50; }
+    const stats = s.channels.map((_, ch) => { const a = rnd() * 3, b = rnd() * 3; const r = LR.calculateStats(s, ch, a, b);
+      return { ch, a: f64n(a), b: f64n(b), count: r.count, min: f64n(r.minimum), max: f64n(r.maximum), avg: f64n(r.average), delta: f64n(r.delta), roc: f64n(r.rateOfChange) }; });
+    const events = s.channels.map((c, ch) => ({ ch, min: c.minValue, max: c.maxValue, events: LR.detectEvents(s, ch).map((e) => [f64n(e.timeSeconds), e.type, e.detail]) }));
+    const otherText = csvText();
+    const other = LR.csvSession('b.csv', otherText, 1, null);
+    const diff = LR.differenceSession(s, other, null, rnd() < 0.8 ? 1 : 0);
+    cases.push({ text, session: sessionJson(s), stats, events, otherText, alignment: diff.warnings.some((w) => w.startsWith('Initial')) ? 0 : 1,
+      diff: { channels: diff.channels.map((c) => c.name), times: diff.sampleSet.timesSeconds.map(f64n), values: diff.sampleSet.channelValues.map((v) => v.map(f64n)), warnings: diff.warnings } });
+  }
+  write('log_review.json', cases);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

@@ -58,6 +58,7 @@ regenerates every vector file byte for byte.
 | Calibration import: file onto a definition, item-by-item analysis, applying a selection (incl. 16→2, 2→16, 16x16→8x8) | `core/lib/src/calibration/calibration_import.dart` |
 | Onboard logging: support, configuration, start/stop, logs, erase, format, download, CSV; .NET number text and parsing for files | `core/lib/src/logs/` |
 | PC logging: CSV header and lines, a recorder sampling the live store at its rate | `core/lib/src/logs/pc_log.dart` |
+| Log review: CSV logs into sessions, statistics, events, difference sessions | `core/lib/src/logs/log_review.dart` |
 
 ### What the second session changed and found
 
