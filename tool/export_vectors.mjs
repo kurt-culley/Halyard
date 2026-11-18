@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units,custom_can,sim_can}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -748,6 +748,121 @@ write('live.json', liveCases);
   }
   globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
   write('sim_can.json', cases);
+}
+
+// ---------------------------------------------------------------- calibration import: analysis and applying a selection
+// A target definition and a source made from it by renaming, renumbering, reshaping, reordering and dropping items.
+// The vectors hold the TypeScript analysis, which candidates were then selected, the target after applying them, and
+// the source file applied onto the target's definition (U10a F01).
+{
+  const { CalibrationImportReviewService } = await src('import-review.ts');
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const SHAPES = { T1x16: [1, 16], T1x32: [1, 32], T16x16: [16, 16], T1x2: [1, 2], T8x8: [8, 8] };
+  const CATS = ['Fuel', 'Ignition', 'Boost', 'Idle'];
+  const PARAM_NAMES = ['Mode', 'Gain', 'Offset', 'Max Duty', 'Min Duty', 'Rate', 'Pin', 'Threshold', 'Delay', 'Enable'];
+  const vals = (n) => Array.from({ length: n }, () => Math.fround(randVal()));
+  const axis = (n) => Array.from({ length: n }, (_, k) => Math.fround(k * (1 + int(50)) - int(20)));
+  function baseSpec() {
+    const links = Array.from({ length: 6 + int(6) }, (_, i) => ({ id: 10 + i, name: 'Link ' + i }));
+    const tables = Array.from({ length: 2 + int(6) }, (_, i) => {
+      const type = pick(Object.keys(SHAPES)); const [rows, cols] = SHAPES[type];
+      return { id: 4096 + i, name: 'Table ' + i, category: pick(CATS), type, rows, cols, in0: pick(links).id, in1: pick(links).id, out: pick(links).id,
+        enabled: rnd() < 0.5, x: axis(cols), y: axis(rows), z: vals(rows * cols) };
+    });
+    const drivers = Array.from({ length: 1 + int(4) }, (_, i) => {
+      const id = i === 0 && rnd() < 0.4 ? 8198 : 8192 + i;
+      const names = [...PARAM_NAMES].sort(() => rnd() - 0.5).slice(0, 2 + int(5));
+      if (id === 8198) names.push('CL Min Duty', 'CL Max Duty');
+      const params = names.map((name) => { const combo = rnd() < 0.3; return { name, displayName: rnd() < 0.3 ? name + ' (shown)' : null, type: combo ? 'ComboBox' : 'InputBox',
+        options: combo ? [[0, 'Off'], [1, 'On']] : null, value: combo ? int(2) : Math.fround(randVal()) }; });
+      const ni = int(4), no = int(4);
+      return { id, name: 'Driver ' + i, category: pick(CATS), params, editIn: rnd() < 0.6, editOut: rnd() < 0.6,
+        inIds: Array.from({ length: ni }, () => pick(links).id), outIds: Array.from({ length: no }, () => pick(links).id),
+        inNames: Array.from({ length: ni }, (_, k) => 'In ' + k), outNames: Array.from({ length: no }, (_, k) => 'Out ' + k) };
+    });
+    return { version: '10', links, tables, drivers };
+  }
+  function mutate(t) {
+    const s = clone(t);
+    if (rnd() < 0.4) s.version = '11';
+    for (const l of s.links) { if (rnd() < 0.15) l.id += 100; if (rnd() < 0.1) l.name += ' X'; }
+    const linkIds = s.links.map((l) => l.id);
+    s.tables = s.tables.filter(() => rnd() > 0.1);
+    for (const tb of s.tables) {
+      if (rnd() < 0.2) tb.id += 50;
+      if (rnd() < 0.1) tb.name += ' renamed';
+      if (rnd() < 0.2) tb.enabled = !tb.enabled;
+      for (const k of ['in0', 'in1', 'out']) if (!linkIds.includes(tb[k])) tb[k] = linkIds[0];
+      const reshape = rnd();
+      if (reshape < 0.1 && tb.type === 'T1x2') Object.assign(tb, { type: 'T1x16', rows: 1, cols: 16, x: axis(16), y: axis(1), z: vals(16) });
+      else if (reshape < 0.2 && tb.type === 'T1x16') Object.assign(tb, { type: 'T1x2', rows: 1, cols: 2, x: axis(2), y: axis(1), z: vals(2) });
+      else if (reshape < 0.3 && tb.type === 'T8x8') Object.assign(tb, { type: 'T16x16', rows: 16, cols: 16, x: axis(16), y: axis(16), z: vals(256) });
+      else if (reshape < 0.35) Object.assign(tb, { type: 'T1x32', rows: 1, cols: 32, x: axis(32), y: axis(1), z: vals(32) });
+      tb.z = tb.z.map((v) => (rnd() < 0.3 ? Math.fround(randVal()) : v));
+      if (rnd() < 0.2) tb.x = tb.x.map((v) => Math.fround(v + 1));
+    }
+    s.drivers = s.drivers.filter(() => rnd() > 0.1);
+    for (const d of s.drivers) {
+      if (rnd() < 0.15) d.id += 20;
+      if (d.id === 8198 && rnd() < 0.7) d.params = d.params.filter((p) => !p.name.startsWith('CL ')).concat([{ name: 'PWM Min Duty', displayName: null, type: 'InputBox', options: null, value: Math.fround(randVal()) },
+        { name: 'PWM Max Duty', displayName: null, type: 'InputBox', options: null, value: Math.fround(randVal()) }]);
+      if (rnd() < 0.3) d.params.reverse();
+      d.params = d.params.filter(() => rnd() > 0.1);
+      for (const p of d.params) {
+        if (rnd() < 0.4) p.value = p.type === 'ComboBox' ? int(2) : Math.fround(randVal());
+        if (rnd() < 0.05) p.name = ' ' + p.name.toUpperCase() + '  ';
+        if (rnd() < 0.05) p.type = p.type === 'ComboBox' ? 'InputBox' : 'ComboBox';
+        if (p.type === 'ComboBox' && rnd() < 0.1) p.options = [[0, 'Off'], [2, 'On']];
+      }
+      d.inIds = d.inIds.map((id) => (rnd() < 0.3 ? pick(s.links).id + (rnd() < 0.2 ? 500 : 0) : id));
+      d.outIds = d.outIds.map((id) => (rnd() < 0.3 ? pick(s.links).id : id));
+    }
+    return s;
+  }
+  const specXml = (sp) => '<ecu>' + el('DeviceDataInformationModel', el('ProductName', 'SIM-ECU') + el('ModelName', 'TEST') + el('Version', sp.version)) +
+    `<links>${sp.links.map((l) => el('DataLinkModel', el('id', String(l.id)) + el('name', l.name))).join('')}</links>` +
+    `<tables>${sp.tables.map((t) => el('TableModel', el('id', String(t.id)) + el('name', t.name) + el('category', t.category) + el('enabled', String(t.enabled)) +
+      el('type', t.type) + el('cols', String(t.cols)) + el('rows', String(t.rows)) + el('input_0_LinkId', String(t.in0)) + el('input_1_LinkId', String(t.in1)) +
+      el('output_LinkId', String(t.out)) + el('input_0', t.x.map((v) => el('float', String(v))).join('')) + el('input_1', t.y.map((v) => el('float', String(v))).join('')) +
+      el('output', t.z.map((v) => el('float', String(v))).join('')))).join('')}</tables>` +
+    `<drivers>${sp.drivers.map((d) => el('DriverModel', el('id', String(d.id)) + el('name', d.name) + el('category', d.category) + el('numberOfConfigs', String(d.params.length)) +
+      el('configParams', d.params.map((p) => el('DriverModelParam', el('name', p.name) + (p.displayName ? el('DisplayName', p.displayName) : '') + el('type', p.type) +
+        el('value', String(p.value)) + (p.options ? el('options', p.options.map(([id, n]) => el('comboBoxOption', el('id', String(id)) + el('name', n))).join('')) : ''))).join('')) +
+      el('numberOfOutputs', String(d.outIds.length)) + el('outputLinkIds', d.outIds.map((v) => el('unsignedShort', String(v))).join('')) +
+      el('editableOutputs', String(d.editOut)) + el('outputNames', d.outNames.map((n) => el('string', n)).join('')) +
+      el('editableInputs', String(d.editIn)) + el('inputNames', d.inNames.map((n) => el('string', n)).join('')) +
+      el('numberOfInputs', String(d.inIds.length)) + el('inputLinkIds', d.inIds.map((v) => el('unsignedShort', String(v))).join('')))).join('')}</drivers></ecu>`;
+  const svc = new CalibrationImportReviewService();
+  const fbits = (v) => (v === null ? null : hex(f32(v)));
+  const state = (m) => ({ tables: [...m.allTables.values()].map((t) => [t.id, hex(t.serialize())]), drivers: [...m.allDrivers.values()].map((d) => [d.id, hex(d.serialize())]) });
+  const cases = [];
+  for (let i = 0; i < 60; i++) {
+    const tSpec = baseSpec(), sSpec = mutate(tSpec);
+    const targetXml = specXml(tSpec), sourceXml = specXml(sSpec);
+    const target = DeviceDataModel.fromXml(targetXml, null), source = DeviceDataModel.fromXml(sourceXml, null);
+    const a = svc.analyse(target, source, null);
+    const toggles = a.candidates.map((c, k) => (c.importable && rnd() < 0.2 ? k : -1)).filter((k) => k >= 0);
+    for (const k of toggles) a.candidates[k].selected = !a.candidates[k].selected;
+    const fresh = DeviceDataModel.fromXml(targetXml, null);
+    svc.applySelected(fresh, source, a.candidates);
+    // F01: the source file's values applied onto a fresh target definition, item by item; errors leave an item as it was
+    const onto = DeviceDataModel.fromXml(targetXml, null);
+    for (const [id, t] of source.allTables) { try { const x = onto.allTables.get(id); if (!x) throw new Error('KeyNotFound'); x.deserialize(t.serialize()); } catch { /* kept */ } }
+    for (const [id, d] of source.allDrivers) {
+      const x = onto.allDrivers.get(id);
+      if (!x || x.numberOfConfigs !== d.numberOfConfigs || x.numberOfInputs !== d.numberOfInputs || x.numberOfOutputs !== d.numberOfOutputs || x.privSize !== d.privSize) continue;
+      try { x.deserialize(d.serialize()); } catch { /* kept */ }
+    }
+    cases.push({
+      targetXml, sourceXml, defMismatch: a.hasDefMismatch,
+      candidates: a.candidates.map((c) => ({ kind: c.kind, matchType: c.matchType, importable: c.importable, selected: c.selected, safeDefault: c.safeDefault,
+        changed: c.isChanged, targetId: c.targetModelId, sourceId: c.sourceModelId, targetIndex: c.targetIndex, sourceIndex: c.sourceIndex,
+        delta: fbits(c.valueDelta), cells: c.changedCellCount, axis: c.changedAxisCount, minDelta: fbits(c.minCellDelta), maxDelta: fbits(c.maxCellDelta),
+        enabledChanged: c.enabledChanged, reason: c.reason })),
+      applied: state(fresh), onto: state(onto),
+    });
+  }
+  write('calibration_import.json', cases);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));

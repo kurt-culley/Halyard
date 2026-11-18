@@ -55,6 +55,7 @@ regenerates every vector file byte for byte.
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
 | Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
 | Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids | `core/lib/src/can/` |
+| Calibration import: file onto a definition, item-by-item analysis, applying a selection (incl. 16→2, 2→16, 16x16→8x8) | `core/lib/src/calibration/calibration_import.dart` |
 
 ### What the second session changed and found
 
@@ -87,8 +88,9 @@ regenerates every vector file byte for byte.
 1. **Repo and CI: done.** Private repo `kurt-culley/halyard` on GitHub; GitHub Actions (`.github/workflows/ci.yml`)
    runs analyze, format, tests and both rule checks on every push and pull request, green from the first push. A new
    cloud session attaches it with `add_repo` (push access) and clones it; it no longer needs the zip.
-2. **Sending a calibration**: apply a `.mecal` to the ECU's definition (`calibration.ts` F01, `load-calibration.ts`)
-   and send it (`message-handler.ts` K01–K04). This is the first write path, so it goes with the write gate.
+2. **Sending a calibration**: applying a file and the import analysis are done (`calibration_import.dart`); the
+   review screen and quick selection (`load-calibration.ts`, U17) are app work. Sending (`message-handler.ts` K01–K04)
+   is the first write path, so it goes with the write gate.
 3. **Live data: done.** `core/lib/src/live/live_store.dart`: a ring buffer per link (1200 samples), latest value,
    staleness (not in the latest report), version counter and dirty bits. History follows the original handler; vectors
    in `live.json`. The session creates a store with each definition and feeds it reports.
