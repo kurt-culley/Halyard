@@ -40,7 +40,7 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 The core covers every decision-free module of the reference engine that the build order needs before the app: reading,
 the session, live data and playback, logs, faults, CAN, import, presets, settings pages, table editing, the tuning
 assistant and firmware files. What's left in the core waits on the write gate, on flashing, or on a question below.
-Dart SDK 3.14.1; `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 126 tests pass in about 13 s
+Dart SDK 3.14.1; `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 129 tests pass in about 14 s
 on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), and both rule checks pass.
 `node tool/export_vectors.mjs` regenerates every vector file byte for byte. CI is green on every push.
 
@@ -52,6 +52,7 @@ on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), an
 | `.mecal` writer, backup file name | `core/lib/src/calibration/calibration_file.dart` |
 | ECU simulator and its transport | `core/lib/src/sim/` |
 | Session read path: identify, definition, password state, hashes, reads, reporting and lifesign | `core/lib/src/session/session.dart` |
+| Read-only bench test: the checklist of reads (identity, definition, a table and a driver, hash, 3 s of live data, password state, CAN ids, on-board logging, faults, trigger) through the read-only policy, and the plain-text report with blocked writes and requests sent. Passes against the simulator; it is what to run first on the real ECU | `core/lib/src/session/bench_check.dart` |
 | Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
 | Live data store | `core/lib/src/live/` |
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
