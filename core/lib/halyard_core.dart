@@ -18,6 +18,8 @@ export 'src/link/channel.dart';
 export 'src/link/connection.dart';
 export 'src/link/transport.dart';
 export 'src/live/live_store.dart';
+export 'src/logs/number_text.dart';
+export 'src/logs/onboard_logs.dart';
 export 'src/session/session.dart';
 export 'src/sim/sim_datalog.dart';
 export 'src/sim/sim_ecu.dart';

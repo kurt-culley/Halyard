@@ -56,6 +56,7 @@ regenerates every vector file byte for byte.
 | Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
 | Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids | `core/lib/src/can/` |
 | Calibration import: file onto a definition, item-by-item analysis, applying a selection (incl. 16→2, 2→16, 16x16→8x8) | `core/lib/src/calibration/calibration_import.dart` |
+| Onboard logging: support, configuration, start/stop, logs, erase, format, download, CSV | `core/lib/src/logs/` |
 
 ### What the second session changed and found
 

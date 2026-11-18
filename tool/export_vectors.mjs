@@ -3,7 +3,7 @@
 //   node tool/export_vectors.mjs [path-to-me360]      (default: ../me360, a sibling of this repo)
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
-// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import}.json and copies the original-decoder fuzz corpus.
+// session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -863,6 +863,49 @@ write('live.json', liveCases);
     });
   }
   write('calibration_import.json', cases);
+}
+
+// ---------------------------------------------------------------- onboard logs: download in chunks and save as CSV
+// The TypeScript simulator holds seeded logs; each is fetched the way the TypeScript model does (detail, then regions
+// of at most 512 bytes) and saved with its LogModel. Plus .NET "G" formatting of floats and doubles.
+{
+  const NF = await src('netfmt.ts');
+  const { LogModel, entryCsv } = await src('datalogging.ts');
+  const { entrySize } = datalog;
+  const numbers = [0, -0, 1, -1, 0.1, 1 / 3, 123456789, 1e15, 1e16, 1e-5, 1e-4, 12345.678, 0.5, 2.5, 1e300, 5e-324, NaN, Infinity, -Infinity,
+    ...Array.from({ length: 60 }, () => (rnd() - 0.5) * 10 ** (int(30) - 15))];
+  const general = numbers.map((v) => ({ v: hex([...new Uint8Array(Float64Array.of(v).buffer)]), f: NF.formatGeneral(Math.fround(v)), d: NF.formatGeneral(v, false) }));
+  globalThis.setInterval = () => ({}); globalThis.clearInterval = () => {};
+  const sessions = [];
+  for (let i = 0; i < 6; i++) {
+    const xml = simXml();
+    const m = DeviceDataModel.fromXml(xml, null);
+    const now = Date.UTC(2026, 10, 18, 12, 0, 0) + int(1e9);
+    const ecu = new SimEcu(m, { now: () => now });
+    ecu.seedDataLogging();
+    const sent = []; let reply = null;
+    ecu.reply = (cls, cmd, p) => { reply = { type: 0x0f, cls, cmd, payload: Uint8Array.from(p) }; };
+    const ask = (f) => { sent.push(frameHex(f)); reply = null; ecu.handle(f); return reply ? kinds.CHANNEL_FACTORY.create(reply) : null; };
+    const summary = ask(datalog.getLogsSummaryRequest());
+    const logs = [];
+    for (const s of summary.logsSummaries) {
+      const log = new LogModel(m, s.timestamp, s.id, s.durationSeconds, s.numOfChannels, s.numEntries);
+      const detail = ask(datalog.getLogDetailRequest(log.id));
+      log.updateChannels(detail.chanIds);
+      const size = entrySize(log.numChannels);
+      for (;;) {
+        const chunk = Math.min(log.numEntries - log.entries.length, Math.trunc(512 / size));
+        if (chunk === 0) break;
+        log.addEntries(ask(datalog.getLogRegionRequest(log.id, log.entries.length, chunk >>> 0)).entries);
+      }
+      let text = '';
+      const ok = log.save('logs/x.csv', { createDirectory() {}, createFile() { return { write: (t) => { text += t; }, flush() {}, close() {} }; } });
+      logs.push({ id: log.id, csv: ok ? text : null });
+    }
+    sessions.push({ xml, now, sent, logs });
+  }
+  globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval;
+  write('onboard_logs.json', [{ general, sessions }]);
 }
 
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
