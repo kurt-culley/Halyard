@@ -35,12 +35,14 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 - Carried over from the earlier project: no VM in any capacity, no .NET oracle, don't hit the vendor's FTP server.
 - Kurt has only an Intel MacBook (8 GB). Sync work to `~/Desktop/rea-meite/halyard` on his Mac when linked.
 
-## State (18 Nov 2026, end of the second session)
+## State (18 Nov 2026, third session)
 
-Step 1 of the build order (scaffold and core read path) is done in the core, apart from CI hosting. The core compiles
-and its checks pass: Dart SDK 3.14.1, `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 60 tests
-pass in about 5 s on the VM and in about a minute in Chrome (one more skips until `HALYARD_DEFS` is set), and both rule checks pass. `node tool/export_vectors.mjs`
-regenerates every vector file byte for byte.
+The core covers every decision-free module of the reference engine that the build order needs before the app: reading,
+the session, live data and playback, logs, faults, CAN, import, presets, settings pages, table editing, the tuning
+assistant and firmware files. What's left in the core waits on the write gate, on flashing, or on a question below.
+Dart SDK 3.14.1; `dart analyze --fatal-infos` clean, `dart format` clean at 120 columns, 122 tests pass in about 12 s
+on the VM and run in Chrome too (one more skips until `HALYARD_DEFS` is set), and both rule checks pass.
+`node tool/export_vectors.mjs` regenerates every vector file byte for byte. CI is green on every push.
 
 | Done and tested against the TypeScript engine | Files |
 |---|---|
