@@ -247,10 +247,12 @@ The TypeScript modules in `me360/src` move like this.
 |---|---|
 | framing, protocol, requests, responses, message-handler, reporting, `*-msg` | `core/wire` |
 | channel, connection, probe, port-scan, protocol-service, the bench guard | `core/link` |
+| bench (the checklist and its report text, run over a session) | `core/session` |
 | def-readers, def-manager, def-picker, datamodel, kinds, device-model, datalink, xml, xmlser | `core/definition` |
-| calibration, load-calibration, import-review, calibration-notes, undo, presets | `core/calibration` |
+| calibration, load-calibration, import-review, calibration-notes, undo, presets, driver-settings (rows, parsing, change checks), the value operations of table-format and table-grid (decimals, formulas, pasted cells, interpolation, live position, smoothing) | `core/calibration` |
 | app-model, app-settings | `core/session`, plus the `settings` feature |
-| pc-logging, rolling-csv, datalogging, playback, log-review | `core/logs` |
+| pc-logging, rolling-csv, datalogging, log-review, trigger-logger | `core/logs` |
+| playback (pausing, seeking and loading recordings in the ring buffers), datalink presentation (value text, feedback states) | `core/live` |
 | histogram, autotune, tuning-assistant, calibration-wizards | `core/analysis` |
 | firmware, firmware-controller | `core/firmware` |
 | faults, fault-log-model | `core/faults` |
@@ -258,11 +260,11 @@ The TypeScript modules in `me360/src` move like this.
 | units | `core/units` |
 | ecu-sim | `core/sim` |
 | web-serial | `app/platform` |
-| layout, layout-manager, widget-edit, widget-place, live-dash, favorites, main-menu, shortcuts, status-strip, warning-center, gauge, dro, table-grid, table-format, table-menu, table-trail, table-graph, graph3d, new-project, ecu-tools, bench report | redesigned in `app`, not ported line by line |
+| layout, layout-manager, widget-edit, widget-place, live-dash, favorites, main-menu, shortcuts, status-strip, warning-center, gauge, dro, table-grid, table-format, table-menu, table-trail, table-graph, graph3d, new-project, ecu-tools | redesigned in `app`, not ported line by line; the logic they share with files or other features is in the core rows above |
 | netfmt, netcoll, help, resources, resources-http | dropped |
 
 Why the last row is dropped:
-- netfmt and netcoll emulated the original's runtime (number formatting and collection ordering). Their output is kept only where text goes into interchange files.
+- netfmt and netcoll emulated the original's runtime (number formatting and collection ordering). Their output is kept where text goes into interchange files, and the core's display helpers (live value text, table decimals, settings values) use the same rules so numbers read as they did; the app may present them differently.
 - help and resources served the vendor's manual and its download server.
 
 ## Build order
