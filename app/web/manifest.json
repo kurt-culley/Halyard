@@ -1,11 +1,11 @@
 {
-    "name": "halyard",
-    "short_name": "halyard",
+    "name": "Halyard",
+    "short_name": "Halyard",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Engine calibration and live data.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
