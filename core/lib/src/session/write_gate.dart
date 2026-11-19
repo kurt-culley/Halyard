@@ -90,12 +90,11 @@ class WriteGate {
   /// Sends a table's changes, and stores it when asked.
   Future<WriteResult> saveTable(int tableId, {bool store = false}) => _send(tableSaveFrames(tableId, store: store));
 
-  /// Checks a settings change the original's way and, when it passes, makes it here (not yet sent).
+  /// Checks a settings change the original's way and, when it is valid, makes it here (not yet sent). A warning or
+  /// a change needing approval waits for [applyApproved].
   SettingCheck setSetting(int driverId, int index, double raw) {
     final check = checkSetting(_cal, driverId, index, raw);
-    if (check.verdict == SettingVerdict.valid || check.verdict == SettingVerdict.warning) {
-      _cal.drivers[driverId]!.config[index] = raw;
-    }
+    if (check.verdict == SettingVerdict.valid) _cal.drivers[driverId]!.config[index] = raw;
     return check;
   }
 

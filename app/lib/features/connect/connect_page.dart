@@ -20,6 +20,7 @@ class ConnectPage extends StatelessWidget {
       c.read<ValueNotifier<TransportOpener?>>(),
       c.read<Connection>(),
       c.read<Session>(),
+      c.read<SwitchablePolicy>(),
     ),
     child: const _ConnectView(),
   );
@@ -125,6 +126,14 @@ class _ConnectViewState extends State<_ConnectView> {
             if (!c.isConnected)
               FilledButton(onPressed: c.port == null ? null : c.connectPort, child: const Text(ConnectStrings.connect)),
           ],
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text(ConnectStrings.readOnly),
+          subtitle: const Text(ConnectStrings.readOnlyHint),
+          value: c.readOnly,
+          onChanged: (v) => c.readOnly = v,
         ),
         const SizedBox(height: 32),
         Text(ConnectStrings.demo, style: theme.textTheme.titleLarge),

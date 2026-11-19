@@ -10,6 +10,8 @@ class MapGrid extends StatelessWidget {
     required this.cells,
     required this.shades,
     this.live,
+    this.selected,
+    this.onTap,
   });
 
   final List<String> columns;
@@ -26,6 +28,10 @@ class MapGrid extends StatelessWidget {
   /// The live cell: (row, column).
   final (int, int)? live;
 
+  /// The chosen cell, and what a tap on a cell does.
+  final (int, int)? selected;
+  final void Function(int row, int col)? onTap;
+
   static const cellWidth = 64.0, cellHeight = 26.0;
 
   @override
@@ -35,13 +41,17 @@ class MapGrid extends StatelessWidget {
     final style = theme.textTheme.bodySmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
     final head = style.copyWith(fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant);
     final n = rows.isEmpty ? 1 : rows.length;
-    Widget box(String text, TextStyle s, {Color? fill, bool outline = false}) => Container(
+    Widget box(String text, TextStyle s, {Color? fill, bool outline = false, bool chosen = false}) => Container(
       width: cellWidth,
       height: cellHeight,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: fill,
-        border: outline ? Border.all(color: scheme.onSurface, width: 2) : null,
+        border: chosen
+            ? Border.all(color: scheme.primary, width: 3)
+            : outline
+            ? Border.all(color: scheme.onSurface, width: 2)
+            : null,
       ),
       child: Text(text, style: s, overflow: TextOverflow.clip, maxLines: 1),
     );
@@ -58,11 +68,15 @@ class MapGrid extends StatelessWidget {
                 children: [
                   if (rows.isNotEmpty) box(rows[r], head),
                   for (var c = 0; c < columns.length; c++)
-                    box(
-                      cells[r * columns.length + c],
-                      style,
-                      fill: shade(shades[r * columns.length + c]),
-                      outline: live == (r, c),
+                    GestureDetector(
+                      onTap: onTap == null ? null : () => onTap!(r, c),
+                      child: box(
+                        cells[r * columns.length + c],
+                        style,
+                        fill: shade(shades[r * columns.length + c]),
+                        outline: live == (r, c),
+                        chosen: selected == (r, c),
+                      ),
                     ),
                 ],
               ),

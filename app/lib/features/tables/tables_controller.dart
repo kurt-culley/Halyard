@@ -21,12 +21,66 @@ typedef TableView = ({
 
 /// The ECU's tables by category, and the chosen one as text and shades with its live cell.
 class TablesController extends ChangeNotifier {
-  TablesController(this._session) {
+  TablesController(this._session, this._gate, this._policy) {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) => _tick());
   }
 
   final Session _session;
+  final WriteGate _gate;
+  final SwitchablePolicy _policy;
   late final Timer _timer;
+  (int, int)? cell;
+  String? message;
+
+  bool get canEdit => !_policy.readOnly;
+
+  void choose(int row, int col) {
+    cell = (row, col);
+    message = null;
+    notifyListeners();
+  }
+
+  /// Applies a value or formula to the chosen cell and sends it, as the original did after each edit.
+  Future<void> edit(String text) async {
+    final id = selected, at = cell, cal = _session.calibration;
+    if (id == null || at == null || cal == null || !canEdit) return;
+    final v = cal.tables[id]!;
+    final i = at.$1 * v.x.length + at.$2;
+    final t = text.trim();
+    double? value;
+    if (t.isNotEmpty && '+-*/='.contains(t[0]) && t.length > 1) {
+      final f = TableFormula.parse(t);
+      if (f.isValid) value = f.apply(v.z[i]);
+    }
+    if (value == null) {
+      try {
+        value = parseNetSingle(t);
+      } on Object {
+        value = null;
+      }
+    }
+    if (value == null) {
+      message = TablesStrings.notNumber;
+      notifyListeners();
+      return;
+    }
+    _gate.setTableCell(id, TableElement.values, i, value);
+    await _report(_gate.saveTable(id));
+  }
+
+  Future<void> store() async {
+    final id = selected;
+    if (id == null || !canEdit) return;
+    await _report(_gate.saveTable(id, store: true), done: TablesStrings.stored);
+  }
+
+  Future<void> _report(Future<WriteResult> f, {String? done}) async {
+    final r = await f;
+    final failed = r.failed;
+    message = failed == null ? done : TablesStrings.failed(failed.failure.name);
+    notifyListeners();
+  }
+
   int? selected;
   Object? _seen;
 
@@ -44,6 +98,8 @@ class TablesController extends ChangeNotifier {
 
   void select(int id) {
     selected = id;
+    cell = null;
+    message = null;
     notifyListeners();
   }
 

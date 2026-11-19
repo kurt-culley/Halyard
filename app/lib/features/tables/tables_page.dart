@@ -13,7 +13,7 @@ class TablesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (c) => TablesController(c.read<Session>()),
+    create: (c) => TablesController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>()),
     child: Consumer<TablesController>(
       builder: (context, c, _) {
         if (!c.isOnline) return const Center(child: Text(TablesStrings.notOnline));
@@ -58,13 +58,38 @@ class TablesPage extends StatelessWidget {
                             [
                               TablesStrings.axes(view.across, view.down),
                               if (!view.enabled) TablesStrings.disabled,
-                              TablesStrings.readOnly,
+                              if (!c.canEdit) TablesStrings.readOnly,
                             ].where((s) => s.isNotEmpty).join('   ·   '),
                             style: theme.textTheme.bodySmall,
                           ),
+                          if (c.canEdit) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 520,
+                                  child: TextField(
+                                    enabled: c.cell != null,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      hintText: TablesStrings.editHint,
+                                      helperText: TablesStrings.editHelp,
+                                    ),
+                                    onSubmitted: c.edit,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                OutlinedButton(onPressed: c.store, child: const Text(TablesStrings.store)),
+                                const SizedBox(width: 12),
+                                if (c.message != null) Text(c.message!),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           Expanded(
                             child: MapGrid(
+                              selected: c.cell,
+                              onTap: c.canEdit ? c.choose : null,
                               columns: view.columns,
                               rows: view.rows,
                               cells: view.cells,

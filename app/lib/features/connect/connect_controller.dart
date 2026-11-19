@@ -5,11 +5,20 @@ import 'package:material_ui/material_ui.dart';
 
 /// The definition library, the serial ports and the demo link.
 class ConnectController extends ChangeNotifier {
-  ConnectController(this._saved, this._folders, this._ports, this._link, this._connection, this._session) {
+  ConnectController(
+    this._saved,
+    this._folders,
+    this._ports,
+    this._link,
+    this._connection,
+    this._session,
+    this._policy,
+  ) {
     _sub = _session.states.listen((_) => notifyListeners());
     unawaited(refreshPorts());
   }
 
+  final SwitchablePolicy _policy;
   final SavedDefinitions _saved;
   final FolderPicker _folders;
   DefinitionLibrary get _definitions => _saved.library;
@@ -59,6 +68,13 @@ class ConnectController extends ChangeNotifier {
   }
 
   bool get canAddFolder => _folders.available;
+
+  /// Only reads reach the ECU while this is on.
+  bool get readOnly => _policy.readOnly;
+  set readOnly(bool v) {
+    _policy.readOnly = v;
+    notifyListeners();
+  }
 
   /// Adds and keeps a definition file's text; false when it isn't a definition.
   Future<bool> addDefinition(String name, String text) async {

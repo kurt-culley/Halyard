@@ -5,16 +5,65 @@ import 'package:material_ui/material_ui.dart';
 
 import 'strings.dart';
 
-typedef ParameterRow = ({String section, String name, String? unit, String value, String? tip, bool enabled});
+typedef ParameterRow = ({
+  int index,
+  String section,
+  String name,
+  String? unit,
+  String value,
+  String? tip,
+  bool enabled,
+  bool editable,
+});
 typedef LinkChoiceRow = ({String name, String value});
 
 /// The ECU's settings pages, read only, in the units the user reads.
 class ParametersController extends ChangeNotifier {
-  ParametersController(this._session, {this.units = defaultUnitPreferences}) {
+  ParametersController(this._session, this._gate, this._policy, {this.units = defaultUnitPreferences}) {
     _sub = _session.states.listen((_) => notifyListeners());
   }
 
   final Session _session;
+  final WriteGate _gate;
+  final SwitchablePolicy _policy;
+  String? message;
+
+  bool get canEdit => !_policy.readOnly;
+
+  ParamDef? param(int index) => _session.calibration?.definition.drivers[selected]?.params[index];
+
+  /// The options of a list setting, or null for a typed one.
+  List<(double, String)>? optionsOf(int index) {
+    final p = param(index);
+    if (p == null || p.type != ParamType.comboBox) return null;
+    return [for (final o in p.options ?? const <ComboOption>[]) (o.id.toDouble(), o.name ?? '${o.id}')];
+  }
+
+  String textOf(int index) {
+    final cal = _session.calibration!;
+    final d = cal.definition.drivers[selected]!;
+    return settingText(d.params[index], settingValue(d, cal.drivers[selected]!, index), units);
+  }
+
+  /// Parses the typed text in the user's units; null when it isn't a value.
+  double? parse(int index, String text) => param(index) == null ? null : parseSetting(param(index)!, text, units);
+
+  /// Checks a change the original's way; a valid one is made at once.
+  SettingCheck check(int index, double raw) => _gate.setSetting(selected!, index, raw);
+
+  void approve(int index, double raw, SettingCheck c) => _gate.applyApproved(selected!, index, raw, c);
+
+  /// Sends the page's settings, as the original did after each change.
+  Future<void> send({bool store = false}) async {
+    final r = await _gate.saveDriver(selected!, store: store);
+    final failed = r.failed;
+    message = failed == null
+        ? (store ? ParametersStrings.stored : ParametersStrings.sent)
+        : ParametersStrings.failed(failed.failure.name);
+    notifyListeners();
+  }
+
+  String nameOf(int index) => settingName(param(index)!);
   final UnitPreferences units;
   late final StreamSubscription<SessionState> _sub;
   int? selected;
@@ -30,6 +79,7 @@ class ParametersController extends ChangeNotifier {
 
   void select(int id) {
     selected = id;
+    message = null;
     notifyListeners();
   }
 
@@ -43,12 +93,14 @@ class ParametersController extends ChangeNotifier {
         () {
           final unit = r.param.type == ParamType.comboBox ? null : preferredUnit(r.param.measurementUnits, units);
           return (
+            index: r.index,
             section: r.section,
             name: settingName(r.param),
             unit: unit == null || unit == MeasurementUnit.raw ? null : ParametersStrings.unit(unit),
             value: settingText(r.param, settingValue(d, v, r.index), units),
             tip: r.param.toolTipText,
             enabled: isSettingEnabled(d, v, r.index),
+            editable: !isSettingReadOnly(d, v, r.index),
           );
         }(),
     ];

@@ -7,7 +7,10 @@ abstract final class ConnectStrings {
   static const remove = 'Remove';
   static const noDefinitions = 'No definitions yet.';
   static const serial = 'Serial port';
-  static const serialHint = 'Connect to the ECU over USB. Halyard only reads from it until editing arrives.';
+  static const serialHint = 'Connect to the ECU over USB.';
+  static const readOnly = 'Read only';
+  static const readOnlyHint =
+      'Nothing can be changed on the ECU while this is on. Run the bench test first, then turn it off to edit.';
   static const noPorts = 'No ports found.';
   static const choosePort = 'Choose a port…';
   static const refresh = 'Refresh';

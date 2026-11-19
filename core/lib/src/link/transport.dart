@@ -89,6 +89,15 @@ abstract interface class FramePolicy {
   bool allows(Frame f);
 }
 
+/// Read-only while [readOnly] is on (the bench test, a first connection), everything otherwise.
+final class SwitchablePolicy implements FramePolicy {
+  SwitchablePolicy({this.readOnly = true});
+  bool readOnly;
+
+  @override
+  bool allows(Frame f) => !readOnly || const ReadOnlyPolicy().allows(f);
+}
+
 /// Reads only. Lets through requests that read, the RAM-only switches live data needs, and the lifesign; refuses
 /// everything that changes the ECU, including the host's answers during a firmware transfer. Used on mobile and in
 /// bench mode.

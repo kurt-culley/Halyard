@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
+import 'package:halyard/features/parameters/parameters_controller.dart';
+import 'package:halyard/features/tables/tables_controller.dart';
 import 'package:halyard/instruments/log_plot.dart';
 import 'package:halyard/instruments/map_grid.dart';
 import 'package:halyard/instruments/readout.dart';
@@ -24,6 +26,7 @@ final class _FakePorts implements PortFinder {
   _FakePorts(String xml)
     : _ecu = SimEcu(readDeviceFile(xml).calibration, reportPeriod: const Duration(milliseconds: 100));
   final SimEcu _ecu;
+  SimEcu get ecu => _ecu;
 
   @override
   bool get canAsk => false;
@@ -87,6 +90,49 @@ void main() {
     await tester.pumpWidget(DesktopRoot(ports: _FakePorts(xml), storage: storage, folders: _NoFolders()));
     await tester.pumpAndSettle();
     expect(find.text('demo.medef'), findsWidgets);
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('with read only off, a table cell and a setting reach the ECU', (tester) async {
+    final xml = _definition();
+    final ports = _FakePorts(xml);
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: ports, storage: _MemoryStorage(), folders: _NoFolders()));
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', xml);
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await _settle(tester, 20);
+
+    await tester.tap(find.text('Tables'));
+    await _settle(tester, 3);
+    await tester.tap(find.byType(ListTile).first);
+    await _settle(tester, 3);
+    final tables = tester.element(find.byType(MapGrid)).read<TablesController>();
+    final tableId = tables.selected!;
+    tables.choose(0, 0);
+    await tables.edit('42.5');
+    await _settle(tester, 5);
+    expect(ports.ecu.calibration.tables[tableId]!.z[0], 42.5);
+    await tables.edit('+10%');
+    await _settle(tester, 5);
+    expect(ports.ecu.calibration.tables[tableId]!.z[0], closeTo(46.75, 1e-4));
+
+    await tester.tap(find.text('Settings').first);
+    await _settle(tester, 3);
+    await tester.tap(find.byType(ListTile).first);
+    await _settle(tester, 3);
+    final settings = tester.element(find.text('Store to flash')).read<ParametersController>();
+    final driverId = settings.selected!;
+    final index = settings.rows.firstWhere((r) => r.editable).index;
+    expect(settings.check(index, 7).verdict, SettingVerdict.valid);
+    await settings.send();
+    await _settle(tester, 5);
+    expect(ports.ecu.calibration.drivers[driverId]!.config[index], 7);
+
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);
   });
