@@ -1,7 +1,7 @@
 import 'package:halyard_core/halyard_core.dart';
 
 /// The tuning assistant's words, the original's where it had them.
-abstract final class TuningStrings {
+abstract final class AssistStrings {
   static const title = 'Fuel tuning assistant';
   static const intro = 'Use live history, or load a CSV log, choose channels, then analyse.';
   static const detailIntro = 'Select a cell after analysis to inspect confidence, hits, and suggested change.';

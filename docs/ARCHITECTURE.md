@@ -106,7 +106,7 @@ abstract interface class Transport {
 On top of it sit:
 - the request/reply channel (matching, timeouts, lifesign);
 - the connect state machine (probe, baud cycling);
-- `ReadOnlyPolicy`, the default-deny allow-list from the bench test. The channel checks it before encoding, so a refused frame never reaches the transport.
+- `ReadOnlyPolicy`, the default-deny allow-list from the bench test. The channel checks it before encoding, so a refused frame never reaches the transport. Besides reads it lets through RAM-only switches: reporting on/off, the table live cursor, and the trigger scope's on/off (throttle duty, class 8, stays refused).
 
 Timeouts are chosen per kind of link (`LinkTiming.cable`, `LinkTiming.wifi`), so the Wi-Fi bridge can be more patient than a cable.
 

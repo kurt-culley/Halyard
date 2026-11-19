@@ -9,7 +9,7 @@ import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
 import 'package:halyard/features/tables/tables_controller.dart';
-import 'package:halyard/features/trigger/trigger_controller.dart';
+import 'package:halyard/features/trigger_scope/trigger_scope_controller.dart';
 import 'package:halyard/instruments/log_plot.dart';
 import 'package:halyard/instruments/map_grid.dart';
 import 'package:halyard/instruments/readout.dart';
@@ -287,7 +287,7 @@ void main() {
 
     await tester.tap(find.text('Trigger'));
     await _settle(tester, 3);
-    final c = tester.element(find.text('Trigger scope')).read<TriggerController>();
+    final c = tester.element(find.text('Trigger scope')).read<TriggerScopeController>();
     expect(c.available, isNotEmpty);
     await tester.tap(find.text('Start'));
     await _settle(tester, 10);

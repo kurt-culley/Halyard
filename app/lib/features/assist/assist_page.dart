@@ -5,42 +5,42 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../instruments/map_grid.dart';
+import 'assist_controller.dart';
 import 'strings.dart';
-import 'tuning_controller.dart';
 
 @RoutePage()
-class TuningPage extends StatelessWidget {
-  const TuningPage({super.key});
+class AssistPage extends StatelessWidget {
+  const AssistPage({super.key});
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (c) => TuningController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>()),
-    child: const _TuningView(),
+    create: (c) => AssistController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>()),
+    child: const _AssistView(),
   );
 }
 
-class _TuningView extends StatelessWidget {
-  const _TuningView();
+class _AssistView extends StatelessWidget {
+  const _AssistView();
 
-  Future<void> _openCsv(TuningController c) async {
+  Future<void> _openCsv(AssistController c) async {
     final f = await openFile(
       acceptedTypeGroups: const [
-        XTypeGroup(label: TuningStrings.csvType, extensions: ['csv']),
+        XTypeGroup(label: AssistStrings.csvType, extensions: ['csv']),
       ],
     );
     if (f != null) c.openCsv(f.name, await f.readAsString());
   }
 
-  Future<void> _apply(BuildContext context, TuningController c, List<TuningSuggestion> items) async {
+  Future<void> _apply(BuildContext context, AssistController c, List<TuningSuggestion> items) async {
     if (items.isEmpty) return;
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(TuningStrings.title),
-        content: Text(TuningStrings.applyPrompt(items.length)),
+        title: const Text(AssistStrings.title),
+        content: Text(AssistStrings.applyPrompt(items.length)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text(TuningStrings.no)),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text(TuningStrings.yes)),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text(AssistStrings.no)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text(AssistStrings.yes)),
         ],
       ),
     );
@@ -49,8 +49,8 @@ class _TuningView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.watch<TuningController>();
-    if (!c.isOnline) return const Center(child: Text(TuningStrings.notOnline));
+    final c = context.watch<AssistController>();
+    if (!c.isOnline) return const Center(child: Text(AssistStrings.notOnline));
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -64,7 +64,7 @@ class _TuningView extends StatelessWidget {
 
 class _Settings extends StatelessWidget {
   const _Settings(this.c, {required this.onOpenCsv});
-  final TuningController c;
+  final AssistController c;
   final VoidCallback onOpenCsv;
 
   Widget _pick(String label, int? value, List<Choice> items, void Function(int?) onChanged) =>
@@ -97,20 +97,20 @@ class _Settings extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(TuningStrings.title, style: theme.textTheme.titleLarge),
+        Text(AssistStrings.title, style: theme.textTheme.titleLarge),
         const SizedBox(height: 4),
-        Text(TuningStrings.intro, style: theme.textTheme.bodySmall),
+        Text(AssistStrings.intro, style: theme.textTheme.bodySmall),
         const SizedBox(height: 16),
-        _pick(TuningStrings.veTable, c.ve, c.maps, (v) => c.update((c) => c.ve = v)),
+        _pick(AssistStrings.veTable, c.ve, c.maps, (v) => c.update((c) => c.ve = v)),
         const SizedBox(height: 8),
-        _pick(TuningStrings.targetTable, c.target, c.maps, (v) => c.update((c) => c.target = v)),
+        _pick(AssistStrings.targetTable, c.target, c.maps, (v) => c.update((c) => c.target = v)),
         const SizedBox(height: 16),
-        Text(TuningStrings.source, style: theme.textTheme.labelLarge),
+        Text(AssistStrings.source, style: theme.textTheme.labelLarge),
         const SizedBox(height: 4),
         SegmentedButton<bool>(
           segments: [
-            const ButtonSegment(value: false, label: Text(TuningStrings.live)),
-            ButtonSegment(value: true, label: const Text(TuningStrings.csv), enabled: c.csvLog != null),
+            const ButtonSegment(value: false, label: Text(AssistStrings.live)),
+            ButtonSegment(value: true, label: const Text(AssistStrings.csv), enabled: c.csvLog != null),
           ],
           selected: {c.useCsv},
           onSelectionChanged: (s) => c.update((c) => c.useCsv = s.first),
@@ -119,29 +119,29 @@ class _Settings extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: onOpenCsv,
           icon: const Icon(Icons.folder_open),
-          label: Text(c.csvName ?? TuningStrings.openCsv),
+          label: Text(c.csvName ?? AssistStrings.openCsv),
         ),
         const SizedBox(height: 8),
         if (c.useCsv) ...[
-          _pick(TuningStrings.rpm, c.csvRpm, columns, (v) => c.update((c) => c.csvRpm = v ?? -1)),
+          _pick(AssistStrings.rpm, c.csvRpm, columns, (v) => c.update((c) => c.csvRpm = v ?? -1)),
           const SizedBox(height: 8),
-          _pick(TuningStrings.load, c.csvLoad, columns, (v) => c.update((c) => c.csvLoad = v ?? -1)),
+          _pick(AssistStrings.load, c.csvLoad, columns, (v) => c.update((c) => c.csvLoad = v ?? -1)),
           const SizedBox(height: 8),
-          _pick(TuningStrings.measured, c.csvMeasured, columns, (v) => c.update((c) => c.csvMeasured = v ?? -1)),
+          _pick(AssistStrings.measured, c.csvMeasured, columns, (v) => c.update((c) => c.csvMeasured = v ?? -1)),
         ] else ...[
-          _pick(TuningStrings.rpm, c.rpm, c.links, (v) => c.update((c) => c.rpm = v)),
+          _pick(AssistStrings.rpm, c.rpm, c.links, (v) => c.update((c) => c.rpm = v)),
           const SizedBox(height: 8),
-          _pick(TuningStrings.load, c.load, c.links, (v) => c.update((c) => c.load = v)),
+          _pick(AssistStrings.load, c.load, c.links, (v) => c.update((c) => c.load = v)),
           const SizedBox(height: 8),
-          _pick(TuningStrings.measured, c.measured, c.links, (v) => c.update((c) => c.measured = v)),
+          _pick(AssistStrings.measured, c.measured, c.links, (v) => c.update((c) => c.measured = v)),
         ],
         const SizedBox(height: 16),
-        Text(TuningStrings.mode, style: theme.textTheme.labelLarge),
+        Text(AssistStrings.mode, style: theme.textTheme.labelLarge),
         const SizedBox(height: 4),
         SegmentedButton<MeasurementMode>(
           segments: const [
-            ButtonSegment(value: MeasurementMode.afr, label: Text(TuningStrings.afr)),
-            ButtonSegment(value: MeasurementMode.lambda, label: Text(TuningStrings.lambda)),
+            ButtonSegment(value: MeasurementMode.afr, label: Text(AssistStrings.afr)),
+            ButtonSegment(value: MeasurementMode.lambda, label: Text(AssistStrings.lambda)),
           ],
           selected: {c.mode},
           onSelectionChanged: (s) => c.update((c) => c.mode = s.first),
@@ -149,19 +149,19 @@ class _Settings extends StatelessWidget {
         const SizedBox(height: 8),
         TextFormField(
           initialValue: c.stoich.toString(),
-          decoration: const InputDecoration(labelText: TuningStrings.stoich, isDense: true),
+          decoration: const InputDecoration(labelText: AssistStrings.stoich, isDense: true),
           onChanged: (v) => c.update((c) => c.stoich = double.tryParse(v) ?? c.stoich),
         ),
         const SizedBox(height: 16),
-        _slider(TuningStrings.minHits, c.minHits.toDouble(), 1, 20, '', (v) => c.update((c) => c.minHits = v.round())),
-        _slider(TuningStrings.confidence, c.confidence, 0, 100, '%', (v) => c.update((c) => c.confidence = v)),
-        _slider(TuningStrings.stability, c.stability, 1, 50, '%', (v) => c.update((c) => c.stability = v)),
-        _slider(TuningStrings.maxChange, c.maxChange, 1, 50, '%', (v) => c.update((c) => c.maxChange = v)),
+        _slider(AssistStrings.minHits, c.minHits.toDouble(), 1, 20, '', (v) => c.update((c) => c.minHits = v.round())),
+        _slider(AssistStrings.confidence, c.confidence, 0, 100, '%', (v) => c.update((c) => c.confidence = v)),
+        _slider(AssistStrings.stability, c.stability, 1, 50, '%', (v) => c.update((c) => c.stability = v)),
+        _slider(AssistStrings.maxChange, c.maxChange, 1, 50, '%', (v) => c.update((c) => c.maxChange = v)),
         const SizedBox(height: 8),
         FilledButton.icon(
           onPressed: c.analyse,
           icon: const Icon(Icons.auto_graph),
-          label: const Text(TuningStrings.analyse),
+          label: const Text(AssistStrings.analyse),
         ),
       ],
     );
@@ -170,7 +170,7 @@ class _Settings extends StatelessWidget {
 
 class _Results extends StatelessWidget {
   const _Results(this.c, {required this.onApply});
-  final TuningController c;
+  final AssistController c;
   final void Function(List<TuningSuggestion>) onApply;
 
   /// The original's shading: towards green to add fuel, red to remove, by the change and its confidence.
@@ -204,7 +204,7 @@ class _Results extends StatelessWidget {
               FilledButton.icon(
                 onPressed: c.analyse,
                 icon: const Icon(Icons.auto_graph),
-                label: const Text(TuningStrings.analyse),
+                label: const Text(AssistStrings.analyse),
               ),
               const SizedBox(width: 16),
               Expanded(child: Text(c.status, style: theme.textTheme.bodyMedium)),
@@ -212,8 +212,8 @@ class _Results extends StatelessWidget {
           ),
           if (r != null) ...[
             const SizedBox(height: 4),
-            Text(TuningStrings.counts(r.considered, r.used, r.rejected), style: theme.textTheme.bodySmall),
-            Text(TuningStrings.legend, style: theme.textTheme.bodySmall),
+            Text(AssistStrings.counts(r.considered, r.used, r.rejected), style: theme.textTheme.bodySmall),
+            Text(AssistStrings.legend, style: theme.textTheme.bodySmall),
           ],
           const SizedBox(height: 12),
           if (r != null && v != null && r.suggestions.isNotEmpty) ...[
@@ -249,7 +249,7 @@ class _Results extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: s == null
-                    ? const Text(TuningStrings.detailIntro)
+                    ? const Text(AssistStrings.detailIntro)
                     : Wrap(
                         spacing: 24,
                         runSpacing: 4,
@@ -264,7 +264,7 @@ class _Results extends StatelessWidget {
                           Text('Stability: ${(s.stability * 100).round()}%'),
                           Text('Measured: ${s.averageMeasured.toStringAsFixed(3)}'),
                           Text('Target: ${s.averageTarget.toStringAsFixed(3)}'),
-                          Text('Status: ${TuningStrings.note(s.note)}'),
+                          Text('Status: ${AssistStrings.note(s.note)}'),
                         ],
                       ),
               ),
@@ -274,22 +274,22 @@ class _Results extends StatelessWidget {
               children: [
                 if (!c.canApply)
                   Expanded(
-                    child: Text(TuningStrings.readOnly, style: TextStyle(color: scheme.error)),
+                    child: Text(AssistStrings.readOnly, style: TextStyle(color: scheme.error)),
                   ),
                 if (c.canApply) const Spacer(),
                 OutlinedButton(
                   onPressed: c.canApply && c.selectedForApply.isNotEmpty ? () => onApply(c.selectedForApply) : null,
-                  child: const Text(TuningStrings.applySelected),
+                  child: const Text(AssistStrings.applySelected),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: c.canApply && r.eligible.isNotEmpty ? () => onApply(r.eligible) : null,
-                  child: const Text(TuningStrings.applyHigh),
+                  child: const Text(AssistStrings.applyHigh),
                 ),
               ],
             ),
           ] else
-            const Expanded(child: Center(child: Text(TuningStrings.detailIntro))),
+            const Expanded(child: Center(child: Text(AssistStrings.detailIntro))),
         ],
       ),
     );

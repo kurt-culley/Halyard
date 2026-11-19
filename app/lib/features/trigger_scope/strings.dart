@@ -1,4 +1,4 @@
-abstract final class TriggerStrings {
+abstract final class TriggerScopeStrings {
   static const title = 'Trigger scope';
   static const hint =
       'Captures crank and cam edges as the ECU sees them. Live data pauses while it runs. Scroll to zoom, drag to '

@@ -4,7 +4,7 @@ Read this first in a new session, then [ARCHITECTURE.md](ARCHITECTURE.md) and [b
 
 ## Getting the code into a new session
 
-Halyard lives in the private GitHub repo `kurt-culley/halyard`; clone it so `halyard/` and `me360/` are siblings. If
+Halyard lives in the public GitHub repo `kurt-culley/Halyard` (public since 19 Nov 2026, for GitHub Pages); clone it so `halyard/` and `me360/` are siblings. If
 Kurt's Mac is linked, both projects are also in `~/Desktop/rea-meite/`. Otherwise he attaches `me360-reference.zip`;
 unzip it next to the clone. The reference zip leaves out `me360/defs/` (vendor files); the core tests don't need them.
 
@@ -27,7 +27,8 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 
 - Flutter, Material widgets with **no custom theming**.
 - State: **Provider**; GetX only where needed (reactive state only, never its routing or DI). Routing: **auto_route**.
-- Charts: fl_chart, plus custom painters for the log plot and live trace.
+- Charts: fl_chart, plus custom painters for the log plot and live trace. (fl_chart couldn't be fetched in the
+  sessions so far, so every chart is a painter: `instruments/`.)
 - MVP: **full feature parity on desktop**. Mobile connects to the ECU but **reads only** (no editing). Android uses
   native USB serial; iOS uses a Wi-Fi-to-serial bridge over TCP.
 - Product name "Halyard" is a placeholder.
@@ -133,6 +134,32 @@ packages' analysis, formatting and tests plus the rule checks.
   The vectors total about 15 MB.
 - The TypeScript reference suite passes apart from 22 tests that read `me360/defs/`, which the reference zip leaves out.
 
+### What the fourth session (19 Nov 2026) added to the app
+
+Every feature below runs against the simulator in demo mode and has a widget test through `DesktopRoot`.
+
+- **Tables:** the original's grid surface (`features/tables/grid_selection.dart`): click, drag, Shift and Ctrl
+  selection with the axes as cells, arrows, W/Q/S/A steps (the smooth radius drags neighbours), Enter and + boxes in
+  the original's words, E smooths, T/U tuned marks, Ctrl+C/V, Follow, and the right-click menu (interpolate axes and
+  values, axis marks, copy and paste an axis). Each edit runs on a copy of the table and goes through
+  `WriteGate.setTable`, then is sent; the header says whether the table is stored to flash. A line graph of every row
+  sits under the grid (`instruments/table_chart.dart`); cells use the original's heat ramp (`instruments/heat.dart`)
+  and widen to fit.
+- **Live:** pinned channels as dials (`instruments/dial_gauge.dart`, the original's gauge rules) and a card per channel
+  with a 30 s sparkline and range bar. Pins are kept by channel name in app storage (`live.json`). Dials are also a
+  tile kind on Pages (`LiveStyle`).
+- **Calibration:** save to `.mecal` with notes; open a file and review it with the original's list rules, filters,
+  badges and wording, then apply and send (`WriteGate.sendCalibration` now reads the ECU's read-back into the session's
+  calibration).
+- **Trigger scope:** start/stop as the original (reporting and the silence watchdog held off), follow, zoom, pan,
+  Shift-drag to measure, `.metlg` save and open (`instruments/trigger_scope.dart`). Read only now lets the scope's
+  on/off (7,1) through: a RAM switch like reporting; throttle duty (class 8) stays blocked.
+- **Tuning:** the fuel tuning assistant over live history or a CSV log, with the original's default guesses, shaded
+  suggestions, cell evidence, and Apply selected / high confidence through the gate (rounded to a tenth). The paint
+  brush and CSV export are still to do.
+- The rail scrolls on short windows. The demo definition's tables are enabled and its target table is AFR.
+- `tool/screenshot.mjs` also does right-clicks, drags and repeated keys.
+
 ### What the third session changed and found
 
 - **Ports, each against new TypeScript vectors:** firmware files, presets, live recordings, playback, table editing
@@ -171,13 +198,13 @@ packages' analysis, formatting and tests plus the rule checks.
    core's `PortFinder`: flutter_libserialport on desktop (macOS lists `cu` devices only; the serial entitlement is
    set) and Web Serial through a hand-written `dart:js_interop` binding, tested in Chrome against a fake port built
    from real streams. Neither has met real hardware: the bench test is the first time. flutter_libserialport is MIT
-   and bundles libserialport (LGPL-3.0, linked dynamically). Still to come: curated read-only pages and the inspector,
-   multi-cell selection and the table operations already in the core (interpolate, smooth, paste, presets), editing
-   axes and links, the calibration screens (open, save, compare, import, send), the remaining tools (CAN editor, trigger
-   scope, onboard log download, playback, tuning assistant and autotune, ECU tools, firmware update), a menu command
-   for every drag, more instruments (bar, dial, curve graph), a units preference page (the core's
-   `UnitPreferences` is fixed to the defaults in the app so far), the URL manifest source (its format
-   waits for the S3 bucket), and the `main_mobile.dart` root.
+   and bundles libserialport (LGPL-3.0, linked dynamically). Done since: table editing and graph, dials, calibration
+   save/load/review/send, trigger scope, tuning assistant (fourth session, above). Still to come: presets and import
+   from a calibration in the table menu, decimal places per table, the 3D view, the 1D table's own layout, editing
+   links, playback controls and live recordings, onboard log download, the CAN editor, the tuning assistant's paint
+   brush and export, autotune, ECU tools, firmware update, fault clearing, a menu command for every drag, a units
+   preference page (`UnitPreferences` is fixed to the defaults), the URL manifest source (waits for the S3 bucket), and
+   the `main_mobile.dart` root.
 
 ## Questions for Kurt
 

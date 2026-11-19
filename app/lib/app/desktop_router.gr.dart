@@ -11,6 +11,22 @@
 part of 'desktop_router.dart';
 
 /// generated route for
+/// [AssistPage]
+class AssistRoute extends PageRouteInfo<void> {
+  const AssistRoute({List<PageRouteInfo>? children})
+    : super(AssistRoute.name, initialChildren: children);
+
+  static const String name = 'AssistRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const AssistPage();
+    },
+  );
+}
+
+/// generated route for
 /// [BenchPage]
 class BenchRoute extends PageRouteInfo<void> {
   const BenchRoute({List<PageRouteInfo>? children})
@@ -155,33 +171,17 @@ class TablesRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
-/// [TriggerPage]
-class TriggerRoute extends PageRouteInfo<void> {
-  const TriggerRoute({List<PageRouteInfo>? children})
-    : super(TriggerRoute.name, initialChildren: children);
+/// [TriggerScopePage]
+class TriggerScopeRoute extends PageRouteInfo<void> {
+  const TriggerScopeRoute({List<PageRouteInfo>? children})
+    : super(TriggerScopeRoute.name, initialChildren: children);
 
-  static const String name = 'TriggerRoute';
-
-  static PageInfo page = PageInfo(
-    name,
-    builder: (data) {
-      return const TriggerPage();
-    },
-  );
-}
-
-/// generated route for
-/// [TuningPage]
-class TuningRoute extends PageRouteInfo<void> {
-  const TuningRoute({List<PageRouteInfo>? children})
-    : super(TuningRoute.name, initialChildren: children);
-
-  static const String name = 'TuningRoute';
+  static const String name = 'TriggerScopeRoute';
 
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const TuningPage();
+      return const TriggerScopePage();
     },
   );
 }

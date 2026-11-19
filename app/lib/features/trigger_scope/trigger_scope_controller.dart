@@ -10,8 +10,8 @@ import 'strings.dart';
 
 /// The trigger logger as the original ran it: starting clears the log, turns live reporting and the link's
 /// silence watchdog off, and asks for the chosen channels; stopping undoes that. Reports become the trace.
-class TriggerController extends ChangeNotifier {
-  TriggerController(this._session, this._saver) {
+class TriggerScopeController extends ChangeNotifier {
+  TriggerScopeController(this._session, this._saver) {
     _sub = _session.connection.channel.received.listen(_onReceived);
     _states = _session.states.listen((_) {
       if (isOnline && available == null) unawaited(_ask());
@@ -129,10 +129,10 @@ class TriggerController extends ChangeNotifier {
     final s = selection;
     if (s == null || s.$2 <= s.$1) return const [];
     return [
-      TriggerStrings.span((s.$2 - s.$1) * 1000),
+      TriggerScopeStrings.span((s.$2 - s.$1) * 1000),
       for (final id in log.enabledChannels)
         if (edgesBetween(log.points, id, s.$1, s.$2) case final e)
-          TriggerStrings.edges(TriggerStrings.channels[id], e.rising, e.falling),
+          TriggerScopeStrings.edges(TriggerScopeStrings.channels[id], e.rising, e.falling),
     ];
   }
 
@@ -151,7 +151,7 @@ class TriggerController extends ChangeNotifier {
       message = null;
       fit();
     } on FormatException catch (e) {
-      message = TriggerStrings.unreadable(e.message);
+      message = TriggerScopeStrings.unreadable(e.message);
     }
     notifyListeners();
   }

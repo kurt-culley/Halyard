@@ -23,11 +23,11 @@ class DesktopShellPage extends StatelessWidget {
     ('Live', Icons.speed, LiveRoute()),
     ('Tables', Icons.grid_on, TablesRoute()),
     ('Settings', Icons.tune, ParametersRoute()),
-    ('Tuning', Icons.auto_fix_high, TuningRoute()),
+    ('Tuning', Icons.auto_fix_high, AssistRoute()),
     ('Calibration', Icons.description_outlined, CalibrationRoute()),
     (WorkspaceStrings.pages, Icons.dashboard_customize, WorkspaceRoute()),
     ('Logging', Icons.timeline, LoggingRoute()),
-    ('Trigger', Icons.ssid_chart, TriggerRoute()),
+    ('Trigger', Icons.ssid_chart, TriggerScopeRoute()),
     ('Faults', Icons.report_problem_outlined, FaultsRoute()),
     ('Bench test', Icons.fact_check, BenchRoute()),
   ];

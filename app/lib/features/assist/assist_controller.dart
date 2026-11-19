@@ -9,8 +9,8 @@ typedef Choice = ({int id, String name});
 
 /// The fuel tuning assistant over the ECU's tables and live history (or a CSV log). Analysis only suggests;
 /// applying writes the chosen cells through the write gate and sends the table, as the original saved it.
-class TuningController extends ChangeNotifier {
-  TuningController(this._session, this._gate, this._policy) {
+class AssistController extends ChangeNotifier {
+  AssistController(this._session, this._gate, this._policy) {
     _sub = _session.states.listen((_) {
       if (ve == null) _defaults();
       notifyListeners();
@@ -35,7 +35,7 @@ class TuningController extends ChangeNotifier {
 
   TuningResult? result;
   (int, int)? cell;
-  String status = TuningStrings.intro;
+  String status = AssistStrings.intro;
 
   bool get isOnline => _session.calibration != null && _session.state.phase == SessionPhase.online;
   bool get canApply => isOnline && !_policy.readOnly;
@@ -103,7 +103,7 @@ class TuningController extends ChangeNotifier {
     if (m != null && _has(m.name, ['lambda']) && !_has(m.name, ['afr'])) mode = MeasurementMode.lambda;
   }
 
-  void update(void Function(TuningController c) f) {
+  void update(void Function(AssistController c) f) {
     f(this);
     notifyListeners();
   }
@@ -112,7 +112,7 @@ class TuningController extends ChangeNotifier {
     try {
       final log = readCsvLog(text);
       if (log.headers.isEmpty || log.rows.isEmpty) {
-        status = TuningStrings.noRows;
+        status = AssistStrings.noRows;
         notifyListeners();
         return;
       }
@@ -124,7 +124,7 @@ class TuningController extends ChangeNotifier {
       csvLoad = findTuningColumn(log.headers, ['Primary Load (%)', 'Primary Load', 'Load', 'MAP', n(load)]);
       csvMeasured = findTuningColumn(log.headers, ['Lambda Curr AFR 1', 'Actual AFR', 'AFR', 'Lambda', n(measured)]);
     } on FormatException catch (e) {
-      status = TuningStrings.unreadable(e.message);
+      status = AssistStrings.unreadable(e.message);
     }
     notifyListeners();
   }
@@ -154,7 +154,7 @@ class TuningController extends ChangeNotifier {
     } else {
       final live = _session.live;
       if (rpm == null || load == null || measured == null || live == null) {
-        status = TuningStrings.chooseChannels;
+        status = AssistStrings.chooseChannels;
         notifyListeners();
         return;
       }
@@ -163,8 +163,8 @@ class TuningController extends ChangeNotifier {
     final r = result = analyseTuning(settings, samples);
     final p = r.problem;
     status = p != null
-        ? TuningStrings.problem(p, csv: useCsv)
-        : TuningStrings.done(r.used, r.eligible.length, useCsv ? csvName : null);
+        ? AssistStrings.problem(p, csv: useCsv)
+        : AssistStrings.done(r.used, r.eligible.length, useCsv ? csvName : null);
     if (p != null) result = null;
     notifyListeners();
   }
@@ -197,7 +197,7 @@ class TuningController extends ChangeNotifier {
     analyse();
     final failed = w.failed;
     status = failed == null
-        ? TuningStrings.applied(items.length)
+        ? AssistStrings.applied(items.length)
         : 'The ECU did not accept the change (${failed.failure.name}).';
     notifyListeners();
   }
