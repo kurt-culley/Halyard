@@ -14,7 +14,8 @@ class ConnectPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
     create: (c) => ConnectController(
-      c.read<DefinitionLibrary>(),
+      c.read<SavedDefinitions>(),
+      c.read<FolderPicker>(),
       c.read<PortFinder>(),
       c.read<ValueNotifier<TransportOpener?>>(),
       c.read<Connection>(),
@@ -40,12 +41,16 @@ class _ConnectViewState extends State<_ConnectView> {
         XTypeGroup(label: ConnectStrings.fileTypeLabel, extensions: ['medef']),
       ],
     );
+    final refused = <String>[];
     for (final f in files) {
-      final ok = c.addDefinition(f.name, await f.readAsString());
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ConnectStrings.notADefinition(f.name))));
-      }
+      if (!await c.addDefinition(f.name, await f.readAsString())) refused.add(f.name);
     }
+    _refused(refused);
+  }
+
+  void _refused(List<String> names) {
+    if (names.isEmpty || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ConnectStrings.notDefinitions(names))));
   }
 
   @override
@@ -72,13 +77,21 @@ class _ConnectViewState extends State<_ConnectView> {
               onPressed: () => c.removeDefinition(s),
             ),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: () => _addDefinitions(c),
-            icon: const Icon(Icons.add),
-            label: const Text(ConnectStrings.addDefinitions),
-          ),
+        Wrap(
+          spacing: 12,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _addDefinitions(c),
+              icon: const Icon(Icons.add),
+              label: const Text(ConnectStrings.addDefinitions),
+            ),
+            if (c.canAddFolder)
+              OutlinedButton.icon(
+                onPressed: () async => _refused(await c.addFolder()),
+                icon: const Icon(Icons.folder_open),
+                label: const Text(ConnectStrings.addFolder),
+              ),
+          ],
         ),
         const SizedBox(height: 32),
         Text(ConnectStrings.serial, style: theme.textTheme.titleLarge),

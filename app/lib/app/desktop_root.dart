@@ -3,15 +3,18 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../platform/serial.dart';
+import '../platform/storage.dart';
 import 'desktop_router.dart';
 
-/// The desktop and web composition root: one connection and session for the app's life, the definition library,
-/// and the link the connect feature chooses. Until the write gate exists the link only lets reads through.
+/// The desktop and web composition root: one connection and session for the app's life, the user's saved
+/// definitions, and the link the connect feature chooses. Until the write gate exists the link only lets reads through.
 class DesktopRoot extends StatefulWidget {
-  const DesktopRoot({super.key, this.ports});
+  const DesktopRoot({super.key, this.ports, this.storage, this.folders});
 
-  /// The serial ports; the platform's when null.
+  /// The platform's when null; tests pass their own.
   final PortFinder? ports;
+  final AppStorage? storage;
+  final FolderPicker? folders;
 
   @override
   State<DesktopRoot> createState() => _DesktopRootState();
@@ -20,6 +23,7 @@ class DesktopRoot extends StatefulWidget {
 class _DesktopRootState extends State<DesktopRoot> {
   final _definitions = DefinitionLibrary();
   late final _ports = widget.ports ?? platformPorts();
+  late final _folders = widget.folders ?? platformFolders();
   final _link = ValueNotifier<TransportOpener?>(null);
   late final _connection = Connection((baud) {
     final open = _link.value;
@@ -28,6 +32,28 @@ class _DesktopRootState extends State<DesktopRoot> {
   }, policy: const ReadOnlyPolicy());
   late final _session = Session(_connection, definitions: _definitions.lookup);
   final _router = DesktopRouter();
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
+  SavedDefinitions? _saved;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  Future<void> _start() async {
+    final saved = SavedDefinitions(widget.storage ?? await platformStorage(), _definitions);
+    final failed = await saved.restore();
+    if (!mounted) return;
+    setState(() => _saved = saved);
+    if (failed.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _messenger.currentState?.showSnackBar(
+          SnackBar(content: Text('These saved definitions could not be read: ${failed.join(', ')}')),
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -38,14 +64,19 @@ class _DesktopRootState extends State<DesktopRoot> {
   }
 
   @override
-  Widget build(BuildContext context) => MultiProvider(
-    providers: [
-      Provider.value(value: _definitions),
-      Provider.value(value: _ports),
-      ChangeNotifierProvider.value(value: _link),
-      Provider.value(value: _connection),
-      Provider.value(value: _session),
-    ],
-    child: MaterialApp.router(title: 'Halyard', routerConfig: _router.config()),
-  );
+  Widget build(BuildContext context) {
+    final saved = _saved;
+    if (saved == null) return const ColoredBox(color: Colors.white);
+    return MultiProvider(
+      providers: [
+        Provider.value(value: saved),
+        Provider.value(value: _ports),
+        Provider.value(value: _folders),
+        ChangeNotifierProvider.value(value: _link),
+        Provider.value(value: _connection),
+        Provider.value(value: _session),
+      ],
+      child: MaterialApp.router(title: 'Halyard', scaffoldMessengerKey: _messenger, routerConfig: _router.config()),
+    );
+  }
 }

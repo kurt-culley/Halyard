@@ -1,7 +1,8 @@
 abstract final class ConnectStrings {
   static const definitions = 'Definitions';
   static const definitionsHint =
-      'Add the definition files for your ECU. Halyard ships none; it finds the one that matches the ECU it connects to.';
+      'Add the definition files for your ECU. Halyard ships none; it keeps the ones you add and finds the one that '
+      'matches the ECU it connects to.';
   static const addDefinitions = 'Add definitions…';
   static const remove = 'Remove';
   static const noDefinitions = 'No definitions yet.';
@@ -16,5 +17,8 @@ abstract final class ConnectStrings {
   static const startDemo = 'Start demo';
   static const disconnect = 'Disconnect';
   static const fileTypeLabel = 'Definitions';
-  static String notADefinition(String name) => '$name is not a definition file.';
+  static const addFolder = 'Add a folder…';
+  static String notDefinitions(List<String> names) => names.length == 1
+      ? '${names.first} is not a definition file.'
+      : 'These are not definition files: ${names.join(', ')}';
 }

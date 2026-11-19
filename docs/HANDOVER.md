@@ -66,7 +66,7 @@ packages' analysis, formatting and tests plus the rule checks.
 | Read-only bench test: the checklist of reads (identity, definition, a table and a driver, hash, 3 s of live data, password state, CAN ids, on-board logging, faults, trigger) through the read-only policy, and the plain-text report with blocked writes and requests sent. Passes against the simulator; it is what to run first on the real ECU | `core/lib/src/session/bench_check.dart` |
 | Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
 | Live data store | `core/lib/src/live/` |
-| Definition library: definitions the user adds, matched to the connected ECU (exact model, else generic) | `core/lib/src/definition/definition_library.dart` |
+| Definition library: definitions the user adds, matched to the connected ECU (exact model, else generic); kept between runs by content hash in app storage (`AppStorage`: app support directory natively, the origin-private file system on the web), and a whole folder can be added on desktop | `core/lib/src/definition/definition_library.dart`, `saved_definitions.dart`, `app/lib/platform/storage*.dart` |
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
 | Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
 | Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids; DBC file reading | `core/lib/src/can/` |
@@ -148,8 +148,8 @@ packages' analysis, formatting and tests plus the rule checks.
    set) and Web Serial through a hand-written `dart:js_interop` binding, tested in Chrome against a fake port built
    from real streams. Neither has met real hardware: the bench test is the first time. flutter_libserialport is MIT
    and bundles libserialport (LGPL-3.0, linked dynamically). Still to come: the workspace (pages, tiles, split tree,
-   command palette) in place of the plain rail, instruments beyond the readout, definition sources from a folder or
-   URL with storage behind a core interface, and the `main_mobile.dart` root.
+   command palette) in place of the plain rail, instruments beyond the readout, the URL manifest source (its format
+   waits for the S3 bucket), and the `main_mobile.dart` root.
 
 ## Questions for Kurt
 

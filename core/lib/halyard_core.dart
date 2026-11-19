@@ -17,6 +17,7 @@ export 'src/can/dbc.dart';
 export 'src/definition/definition.dart';
 export 'src/definition/definition_library.dart';
 export 'src/definition/device_file.dart';
+export 'src/definition/saved_definitions.dart';
 export 'src/definition/xml_convert.dart' show XmlValueError;
 export 'src/faults/fault_codes.dart';
 export 'src/faults/fault_log_reader.dart';

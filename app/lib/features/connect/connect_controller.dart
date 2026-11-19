@@ -5,12 +5,14 @@ import 'package:material_ui/material_ui.dart';
 
 /// The definition library, the serial ports and the demo link.
 class ConnectController extends ChangeNotifier {
-  ConnectController(this._definitions, this._ports, this._link, this._connection, this._session) {
+  ConnectController(this._saved, this._folders, this._ports, this._link, this._connection, this._session) {
     _sub = _session.states.listen((_) => notifyListeners());
     unawaited(refreshPorts());
   }
 
-  final DefinitionLibrary _definitions;
+  final SavedDefinitions _saved;
+  final FolderPicker _folders;
+  DefinitionLibrary get _definitions => _saved.library;
   final PortFinder _ports;
   final ValueNotifier<TransportOpener?> _link;
   final Connection _connection;
@@ -56,10 +58,12 @@ class ConnectController extends ChangeNotifier {
     _connection.connect();
   }
 
-  /// Adds a definition file's text; false when it isn't a definition.
-  bool addDefinition(String name, String text) {
+  bool get canAddFolder => _folders.available;
+
+  /// Adds and keeps a definition file's text; false when it isn't a definition.
+  Future<bool> addDefinition(String name, String text) async {
     try {
-      _definitions.add(name, text);
+      await _saved.add(name, text);
     } on DeviceFileError {
       return false;
     }
@@ -67,8 +71,19 @@ class ConnectController extends ChangeNotifier {
     return true;
   }
 
-  void removeDefinition(String source) {
-    _definitions.remove(source);
+  /// Adds every definition in a folder the user picks; returns the files that weren't definitions.
+  Future<List<String>> addFolder() async {
+    final files = await _folders.pick('.medef');
+    if (files == null) return const [];
+    final refused = <String>[];
+    for (final (name, text) in files) {
+      if (!await addDefinition(name, text)) refused.add(name);
+    }
+    return refused;
+  }
+
+  Future<void> removeDefinition(String source) async {
+    await _saved.remove(source);
     notifyListeners();
   }
 

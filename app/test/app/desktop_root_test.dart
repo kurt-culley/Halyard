@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
@@ -31,6 +32,23 @@ final class _FakePorts implements PortFinder {
   ];
 }
 
+final class _MemoryStorage implements AppStorage {
+  final files = <String, Uint8List>{};
+  @override
+  Future<Uint8List?> read(String name) async => files[name];
+  @override
+  Future<void> write(String name, Uint8List bytes) async => files[name] = bytes;
+  @override
+  Future<void> delete(String name) async => files.remove(name);
+}
+
+final class _NoFolders implements FolderPicker {
+  @override
+  bool get available => false;
+  @override
+  Future<List<(String, String)>?> pick(String extension) async => null;
+}
+
 Future<void> _bigWindow(WidgetTester tester) async {
   tester.view.physicalSize = const Size(1400, 1000);
   tester.view.devicePixelRatio = 1;
@@ -46,11 +64,12 @@ Future<void> _settle(WidgetTester tester, int steps) async {
 void main() {
   testWidgets('a serial port connects through the read-only link', (tester) async {
     final xml = _definition();
+    final storage = _MemoryStorage();
     await _bigWindow(tester);
-    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(xml)));
+    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(xml), storage: storage, folders: _NoFolders()));
     await tester.pumpAndSettle();
     expect(find.text('Bench ECU (USB 1234:5678)'), findsOneWidget);
-    tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', xml);
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', xml);
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
     await _settle(tester, 20);
@@ -60,16 +79,25 @@ void main() {
     expect(find.text('Offline'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);
+
+    // A new start finds the definition again.
+    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(xml), storage: storage, folders: _NoFolders()));
+    await tester.pumpAndSettle();
+    expect(find.text('demo.medef'), findsWidgets);
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
   });
 
   testWidgets('demo mode connects, shows live data and passes the bench test', (tester) async {
     await _bigWindow(tester);
-    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(_definition())));
+    await tester.pumpWidget(
+      DesktopRoot(ports: _FakePorts(_definition()), storage: _MemoryStorage(), folders: _NoFolders()),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Offline'), findsOneWidget);
 
     final connect = tester.element(find.text('Definitions')).read<ConnectController>();
-    expect(connect.addDefinition('demo.medef', _definition()), isTrue);
+    expect(await connect.addDefinition('demo.medef', _definition()), isTrue);
     await tester.pump();
     expect(find.text('demo.medef'), findsWidgets);
 
