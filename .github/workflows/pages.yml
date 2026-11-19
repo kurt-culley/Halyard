@@ -1,7 +1,7 @@
 name: Pages
 
-# Publishes the web app to GitHub Pages on every push to main. It holds no vendor files: definitions stay with the
-# user and are added in the app.
+# Publishes the web app to GitHub Pages on every push to main, with our synthetic sample definition beside it at
+# demo.medef. It holds no vendor files: real definitions stay with the user and are added in the app.
 on:
   push:
     branches: [main]
@@ -29,6 +29,9 @@ jobs:
       - name: Build
         run: flutter build web --release --base-href /Halyard/ --no-web-resources-cdn
         working-directory: app
+      - name: Sample definition
+        # Our own synthetic definition, so the demo can be tried without a car. It describes no real ECU.
+        run: node tool/demo_definition.mjs > app/build/web/demo.medef
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app/build/web
