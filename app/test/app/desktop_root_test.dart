@@ -8,6 +8,7 @@ import 'package:halyard/features/calibration/calibration_controller.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
+import 'package:halyard/features/playback/playback_controller.dart';
 import 'package:halyard/features/tables/tables_controller.dart';
 import 'package:halyard/features/trigger_scope/trigger_scope_controller.dart';
 import 'package:halyard/instruments/log_plot.dart';
@@ -175,7 +176,7 @@ void main() {
     }
     expect(find.textContaining('Online'), findsOneWidget);
 
-    await tester.tap(find.text('Live'));
+    await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text('Live')));
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -297,6 +298,42 @@ void main() {
     await _settle(tester, 5);
     expect(c.running, isFalse);
     expect(find.textContaining('Online'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('the playback strip steps back through history, saves it, loads it and goes live', (tester) async {
+    final saver = _KeptFiles();
+    await _bigWindow(tester);
+    await tester.pumpWidget(
+      DesktopRoot(ports: _FakePorts(_definition()), storage: _MemoryStorage(), folders: _NoFolders(), saver: saver),
+    );
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', _definition());
+    await tester.pump();
+    await tester.tap(find.text('Start demo'));
+    await _settle(tester, 40);
+
+    final c = tester.element(find.byType(Slider)).read<PlaybackController>();
+    c.pause();
+    c.step(10);
+    await tester.pump();
+    expect(c.seekIndex, 10);
+    expect(find.text('-00:01:000'), findsOneWidget);
+    expect(find.text('Not Live'), findsOneWidget);
+
+    await c.save();
+    final text = utf8.decode(saver.files.values.single);
+    expect(text, startsWith('Time,'));
+    c.load(text);
+    expect(c.message, isNull);
+    expect(c.seekIndex, 0);
+
+    c.goLive();
+    await tester.pump();
+    expect(find.text('Live'), findsWidgets);
+    expect(c.live, isTrue);
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

@@ -4,6 +4,7 @@ import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../features/playback/playback_strip.dart';
 import '../workspace/choice_dialog.dart';
 import '../workspace/page_layout.dart';
 import '../workspace/strings.dart';
@@ -112,7 +113,11 @@ class DesktopShellPage extends StatelessWidget {
                 Expanded(child: child),
               ],
             ),
-            bottomNavigationBar: const _StatusBar(),
+            bottomNavigationBar: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [PlaybackStrip(), _StatusBar()],
+            ),
           ),
         ),
       );
