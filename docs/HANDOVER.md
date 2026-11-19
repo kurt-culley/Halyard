@@ -38,6 +38,9 @@ are the functional specs, and its engine generates the golden vectors the Dart t
 - Kurt has only an Intel MacBook (8 GB). Sync work to `~/Desktop/rea-meite/halyard` on his Mac when linked.
 - **Deliver through the repo** (commit and push); don't send zips.
 - The open questions below don't block other work: carry on around them.
+- **Safety follows the original.** Writes, stores, changes while the engine runs, file formats and the firmware update
+  do what the original did. Deviate only where something is clearly risky, and record each deviation in
+  behaviour-changes.md. Don't add gates, limits or rules of our own beyond that.
 
 ## State (18 Nov 2026, third session)
 
@@ -168,14 +171,8 @@ packages' analysis, formatting and tests plus the rule checks.
 
 ## Questions for Kurt
 
-- **PC log index (`LoggingInfo.xml`).** The original keeps an XML index of the logs it took next to them, with
-  local-time stamps (U21a X03, X04). Halyard can write and read the same file, or keep its own index in app storage.
-  Not ported until decided; the CSV itself is.
-
-- **Fault diagnostic report files.** The original saves fault reports as JSON with `"format": "meite-fault-report"`
-  and refuses to open files without that marker (U13-J01 to J04). Writing it puts the vendor's name in a file users
-  share; changing it breaks compatibility both ways. Options: keep the marker; write our own marker and also accept
-  the original's when opening; or our own only. Not ported until decided. Everything else in the fault module is.
+None open. The fault report marker and `LoggingInfo.xml` follow the original (19 Nov 2026): the marker is a format
+tag inside the file, not user-facing text.
 
 ## Open questions for the real ECU (bench test)
 

@@ -135,19 +135,14 @@ It hands out capabilities, not a raw link:
 - `reader` always exists.
 - `writer`, the `WriteGate`, exists only when the composition root grants it. The mobile root never does, and also gives its channel the `ReadOnlyPolicy`. "Mobile can't write" therefore holds in two independent places.
 
-The write gate is the one path to the ECU for any change:
+The write gate is the one path to the ECU for any change. It applies the original tool's checks and nothing more
+(Kurt, 19 Nov 2026): the definition's ranges, duplicate values in a group, and the original's relation rules (idle
+duties, Nissan SR trigger and phasing). Changes go to the ECU as the original sent them, and storing to flash works as
+the original's did. The deviations are the ones in behaviour-changes.md, made because the original was unsafe there:
+a batch stops at the first unanswered request (so nothing unacknowledged is stored), and only a reply with a good
+checksum confirms a write. Any further deviation needs the same justification and its own row there.
 
-1. Validate against limits and the risk class. Out-of-pattern edits ask for confirmation; high-risk settings need the engine stopped.
-2. Append to the journal before sending.
-3. Send to RAM, wait for the acknowledgement, read back and compare. The cell shows as pending until then and reverts with an error if the ECU disagrees.
-4. Storing to flash: take a restore point, send store, verify the calibration hash.
-
-Every connect takes a snapshot. Writes are never replayed automatically after a reconnect.
-
-**Auto-store** is a preference, off by default. Turning it on asks for confirmation once. When it's on:
-- it stores a few seconds after the last acknowledged write, never once per edit;
-- every store takes a restore point;
-- it holds while the engine is above idle until the bench test shows that a store doesn't disturb a running engine.
+**Auto-store** is a preference, off by default; when on, it stores a few seconds after the last acknowledged write.
 
 ### Live
 
