@@ -60,8 +60,27 @@ class WriteGate {
     (_dirty[tableId] ??= [<int>{}, <int>{}, <int>{}])[element].add(index);
   }
 
+  /// Sets every cell of a table that differs in [edited], a changed copy of its values, as [setTableCell] would.
+  void setTable(int tableId, TableValues edited) {
+    final v = _cal.tables[tableId]!;
+    for (final (element, from, to) in [
+      (TableElement.values, v.z, edited.z),
+      (TableElement.rows, v.y, edited.y),
+      (TableElement.columns, v.x, edited.x),
+    ]) {
+      for (var i = 0; i < from.length && i < to.length; i++) {
+        setTableCell(tableId, element, i, to[i]);
+      }
+    }
+  }
+
   /// Forgets the changed cells of every table: the calibration was read again.
   void calibrationRead() => _dirty.clear();
+
+  /// Tables sent to the ECU since they were last stored: their changes are lost when it powers off.
+  final _unstored = <int>{};
+
+  bool isUnstored(int tableId) => _unstored.contains(tableId);
 
   /// The frames a table save sends: changed values, then rows (maps only), then columns, one cell per offset; then
   /// a store when asked.
@@ -88,7 +107,16 @@ class WriteGate {
   }
 
   /// Sends a table's changes, and stores it when asked.
-  Future<WriteResult> saveTable(int tableId, {bool store = false}) => _send(tableSaveFrames(tableId, store: store));
+  Future<WriteResult> saveTable(int tableId, {bool store = false}) async {
+    final frames = tableSaveFrames(tableId, store: store);
+    final r = await _send(frames);
+    if (store && r.ok) {
+      _unstored.remove(tableId);
+    } else if (!store && frames.isNotEmpty) {
+      _unstored.add(tableId);
+    }
+    return r;
+  }
 
   /// Checks a settings change the original's way and, when it is valid, makes it here (not yet sent). A warning or
   /// a change needing approval waits for [applyApproved].

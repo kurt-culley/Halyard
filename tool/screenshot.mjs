@@ -1,7 +1,7 @@
 // Screenshots of the web build for reviews: serve app/build/web, then run this with Node 22.
 // Headless Chrome over the DevTools protocol: open a URL, run optional steps, save screenshots.
 // usage: node shot.mjs <url> <out.png> [steps.json]
-// steps: [{wait:ms} | {click:[x,y]} | {shot:"file.png"} | {files:[path...]} | {type:"text"} | {key:"Enter"}]
+// steps: [{wait:ms} | {click:[x,y]} | {right:[x,y]} | {drag:[[x,y],[x,y]]} | {shot:"file.png"} | {files:[path...]} | {type:"text"} | {key:"Enter"}]
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [url, out, stepsFile] = process.argv.slice(2);
@@ -34,8 +34,24 @@ for (const s of steps) {
     const [x, y] = s.click;
     for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
   }
+  if (s.right) {
+    const [x, y] = s.right;
+    for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'right', buttons: type === 'mousePressed' ? 2 : 0, clickCount: 1 });
+  }
+  if (s.drag) {
+    const [[x1, y1], [x2, y2]] = s.drag;
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x1, y: y1 });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x1, y: y1, button: 'left', buttons: 1, clickCount: 1 });
+    for (let k = 1; k <= 10; k++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x1 + (x2 - x1) * k / 10, y: y1 + (y2 - y1) * k / 10, button: 'left', buttons: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x2, y: y2, button: 'left', buttons: 0, clickCount: 1 });
+  }
   if (s.type) await send('Input.insertText', { text: s.type });
-  if (s.key) for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: s.key, code: s.key, windowsVirtualKeyCode: s.key === 'Enter' ? 13 : 0, text: s.key === 'Enter' && type === 'keyDown' ? '\r' : undefined });
+  if (s.key) {
+    const one = s.key.length === 1;
+    const code = one ? `Key${s.key.toUpperCase()}` : s.key;
+    const vk = s.key === 'Enter' ? 13 : one ? s.key.toUpperCase().charCodeAt(0) : 0;
+    for (let n = 0; n < (s.times ?? 1); n++) for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: s.key, code, windowsVirtualKeyCode: vk, text: type === 'keyDown' ? (s.key === 'Enter' ? '\r' : one ? s.key : undefined) : undefined });
+  }
   if (s.files) { for (let i = 0; i < 30 && !chooser; i++) await sleep(100); if (chooser) await send('DOM.setFileInputFiles', { files: s.files, backendNodeId: chooser.backendNodeId }); chooser = null; }
   if (s.shot) { const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(s.shot, Buffer.from(r.result.data, 'base64')); console.log('saved', s.shot); }
 }

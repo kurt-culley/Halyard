@@ -113,13 +113,21 @@ void main() {
     await _settle(tester, 3);
     final tables = tester.element(find.byType(MapGrid)).read<TablesController>();
     final tableId = tables.selected!;
-    tables.choose(0, 0);
-    await tables.edit('42.5');
+    tables.press((1, 1));
+    await tables.setValue('42.5');
     await _settle(tester, 5);
     expect(ports.ecu.calibration.tables[tableId]!.z[0], 42.5);
-    await tables.edit('+10%');
+    await tables.applyFormula('+10%');
     await _settle(tester, 5);
     expect(ports.ecu.calibration.tables[tableId]!.z[0], closeTo(46.75, 1e-4));
+    tables.setRadius(0);
+    await tables.stepBy(1);
+    await _settle(tester, 5);
+    expect(ports.ecu.calibration.tables[tableId]!.z[0], closeTo(46.75 + tables.increment, 1e-4));
+    expect(tables.view!.unstored, isTrue);
+    await tables.store();
+    await _settle(tester, 5);
+    expect(tables.view!.unstored, isFalse);
 
     await tester.tap(find.text('Settings').first);
     await _settle(tester, 3);

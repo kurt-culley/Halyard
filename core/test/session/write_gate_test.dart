@@ -42,6 +42,20 @@ Future<void> main() async {
     }
   });
 
+  test('a whole edited table sets only the cells that differ, each element in its own request', () {
+    final cal = readDeviceFile(cases.first['xml'] as String).calibration;
+    final gate = WriteGate.over(() => cal, Channel.new);
+    final id = cal.tables.keys.first;
+    final edited = cal.tables[id]!.copy();
+    edited.z[1] = 123.25;
+    edited.x[0] = -77.5;
+    gate.setTable(id, edited);
+    final frames = gate.tableSaveFrames(id);
+    expect(frames, hasLength(2));
+    expect(cal.tables[id]!.z[1], edited.z[1]);
+    expect(cal.tables[id]!.x[0], edited.x[0]);
+  });
+
   simulatorTests(((await loadVectors('live.json')).first as Map<String, dynamic>)['xml'] as String);
 }
 
@@ -57,6 +71,9 @@ void simulatorTests(String xml) {
       final id = s.calibration!.tables.keys.first;
       gate.setTableCell(id, TableElement.values, 0, 12.5);
       WriteResult? r;
+      gate.saveTable(id).then((x) => r = x);
+      async.elapse(const Duration(seconds: 1));
+      expect(gate.isUnstored(id), isTrue);
       gate.saveTable(id, store: true).then((x) => r = x);
       async.elapse(const Duration(seconds: 1));
       expect(r?.ok, isTrue);
