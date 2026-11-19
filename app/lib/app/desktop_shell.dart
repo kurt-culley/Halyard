@@ -23,6 +23,7 @@ class DesktopShellPage extends StatelessWidget {
     ('Live', Icons.speed, LiveRoute()),
     ('Tables', Icons.grid_on, TablesRoute()),
     ('Settings', Icons.tune, ParametersRoute()),
+    ('Tuning', Icons.auto_fix_high, TuningRoute()),
     ('Calibration', Icons.description_outlined, CalibrationRoute()),
     (WorkspaceStrings.pages, Icons.dashboard_customize, WorkspaceRoute()),
     ('Logging', Icons.timeline, LoggingRoute()),
@@ -83,19 +84,29 @@ class DesktopShellPage extends StatelessWidget {
           child: Scaffold(
             body: Row(
               children: [
-                NavigationRail(
-                  selectedIndex: tabs.activeIndex,
-                  onDestinationSelected: tabs.setActiveIndex,
-                  labelType: NavigationRailLabelType.all,
-                  trailing: IconButton(
-                    tooltip: '${WorkspaceStrings.palette} (Ctrl+K)',
-                    icon: const Icon(Icons.search),
-                    onPressed: () => openPalette(context, tabs),
+                // The rail scrolls when the window is shorter than its destinations.
+                LayoutBuilder(
+                  builder: (context, box) => SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: box.maxHeight),
+                      child: IntrinsicHeight(
+                        child: NavigationRail(
+                          selectedIndex: tabs.activeIndex,
+                          onDestinationSelected: tabs.setActiveIndex,
+                          labelType: NavigationRailLabelType.all,
+                          trailing: IconButton(
+                            tooltip: '${WorkspaceStrings.palette} (Ctrl+K)',
+                            icon: const Icon(Icons.search),
+                            onPressed: () => openPalette(context, tabs),
+                          ),
+                          destinations: [
+                            for (final (label, icon, _) in _destinations)
+                              NavigationRailDestination(icon: Icon(icon), label: Text(label)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  destinations: [
-                    for (final (label, icon, _) in _destinations)
-                      NavigationRailDestination(icon: Icon(icon), label: Text(label)),
-                  ],
                 ),
                 const VerticalDivider(width: 1),
                 Expanded(child: child),

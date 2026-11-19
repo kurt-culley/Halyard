@@ -22,6 +22,7 @@ class MapGrid extends StatefulWidget {
     this.current,
     this.tuned = const {},
     this.marks = const {},
+    this.colours,
     this.onPress,
     this.onDrag,
     this.onRelease,
@@ -49,6 +50,9 @@ class MapGrid extends StatefulWidget {
   /// Value indexes marked tuned, and axis cells marked for interpolation.
   final Set<int> tuned;
   final Set<(int, int)> marks;
+
+  /// Fills that replace the heat shading, one per value cell; null leaves a cell plain.
+  final List<Color?>? colours;
 
   final void Function((int, int) cell, GridPress press)? onPress;
   final void Function((int, int) cell)? onDrag;
@@ -82,7 +86,7 @@ class _MapGridState extends State<MapGrid> {
 
   @override
   Widget build(BuildContext context) {
-    final MapGrid(:columns, :rows, :cells, :shades, :live, :selected, :current, :tuned, :marks) = widget;
+    final MapGrid(:columns, :rows, :cells, :shades, :live, :selected, :current, :tuned, :marks, :colours) = widget;
     final MapGrid(:onPress, :onDrag, :onRelease, :onDoubleTap) = widget;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -97,7 +101,9 @@ class _MapGridState extends State<MapGrid> {
       final isHead = r == 0 || c == 0;
       final i = (r - 1) * cols + (c - 1);
       final text = r == 0 && c == 0 ? '' : (r == 0 ? columns[c - 1] : (c == 0 ? rows[r - 1] : cells[i]));
-      final fill = isHead ? scheme.surfaceContainerHigh : heatColor(shades[i]);
+      final fill = isHead
+          ? scheme.surfaceContainerHigh
+          : (colours == null ? heatColor(shades[i]) : (colours[i] ?? scheme.surfaceContainerLow));
       final sel = selected.contains((r, c));
       return Positioned(
         left: (c - firstCol) * cellWidth,

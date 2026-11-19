@@ -171,6 +171,22 @@ class TriggerRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [TuningPage]
+class TuningRoute extends PageRouteInfo<void> {
+  const TuningRoute({List<PageRouteInfo>? children})
+    : super(TuningRoute.name, initialChildren: children);
+
+  static const String name = 'TuningRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const TuningPage();
+    },
+  );
+}
+
+/// generated route for
 /// [WorkspacePage]
 class WorkspaceRoute extends PageRouteInfo<void> {
   const WorkspaceRoute({List<PageRouteInfo>? children})
