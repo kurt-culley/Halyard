@@ -52,7 +52,8 @@ Step 2 (desktop read-only slice) has started: `app/` is a Flutter 3.50 package i
 session behind the read-only policy, a definition library and the chosen link. The shell has a navigation rail and a
 status bar; the features are **connect** (add definition files, a serial port, demo mode on the simulator), **live** (a readout per
 link), **tables** (maps and curves read only, by category, shaded by value with the live cell outlined;
-`instruments/map_grid.dart`), **pages** (the workspace, below) and **bench** (the checklist, with blocked writes, requests sent and a
+`instruments/map_grid.dart`), **faults** (codes with state and counts, and the history; clearing waits for the
+write gate; demo mode seeds the simulator's fault log), **pages** (the workspace, below) and **bench** (the checklist, with blocked writes, requests sent and a
 copyable report). The workspace (`app/lib/workspace/`) holds user pages as plain data: tiles in a split tree
 (`page_layout.dart`), each page with its own undo history, saved to app storage after every change. Tiles split,
 close, resize by their dividers, and move by dragging a tile's header onto one side of another. Features register tile

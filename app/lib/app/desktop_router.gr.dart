@@ -59,6 +59,22 @@ class DesktopShellRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [FaultsPage]
+class FaultsRoute extends PageRouteInfo<void> {
+  const FaultsRoute({List<PageRouteInfo>? children})
+    : super(FaultsRoute.name, initialChildren: children);
+
+  static const String name = 'FaultsRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const FaultsPage();
+    },
+  );
+}
+
+/// generated route for
 /// [LivePage]
 class LiveRoute extends PageRouteInfo<void> {
   const LiveRoute({List<PageRouteInfo>? children})

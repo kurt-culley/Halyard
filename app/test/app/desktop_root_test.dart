@@ -121,6 +121,13 @@ void main() {
     await _settle(tester, 3);
     expect(find.byType(MapGrid), findsOneWidget);
 
+    // The fault log, read only.
+    await tester.tap(find.text('Faults'));
+    await _settle(tester, 3);
+    await tester.tap(find.text('Read the fault log'));
+    await _settle(tester, 20);
+    expect(find.byType(DataTable), findsOneWidget);
+
     // A tile on a user page, chosen from the command palette.
     await tester.tap(find.byIcon(Icons.search));
     await tester.pumpAndSettle();
