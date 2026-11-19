@@ -73,3 +73,19 @@ class LiveRoute extends PageRouteInfo<void> {
     },
   );
 }
+
+/// generated route for
+/// [WorkspacePage]
+class WorkspaceRoute extends PageRouteInfo<void> {
+  const WorkspaceRoute({List<PageRouteInfo>? children})
+    : super(WorkspaceRoute.name, initialChildren: children);
+
+  static const String name = 'WorkspaceRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const WorkspacePage();
+    },
+  );
+}

@@ -113,6 +113,14 @@ void main() {
     }
     expect(find.byType(Readout), findsWidgets);
 
+    // A tile on a user page, chosen from the command palette.
+    await tester.tap(find.byIcon(Icons.search));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'show new tile');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await _settle(tester, 5);
+    expect(find.byType(Readout), findsOneWidget);
+
     await tester.tap(find.text('Bench test'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Run the checks'));

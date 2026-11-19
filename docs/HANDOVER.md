@@ -51,7 +51,12 @@ Step 2 (desktop read-only slice) has started: `app/` is a Flutter 3.50 package i
 `material_ui`, Provider, auto_route with a generated router, file_selector). The desktop root holds one connection and
 session behind the read-only policy, a definition library and the chosen link. The shell has a navigation rail and a
 status bar; the features are **connect** (add definition files, a serial port, demo mode on the simulator), **live** (a readout per
-link) and **bench** (the checklist, with blocked writes, requests sent and a copyable report). A widget test runs the
+link), **pages** (the workspace, below) and **bench** (the checklist, with blocked writes, requests sent and a
+copyable report). The workspace (`app/lib/workspace/`) holds user pages as plain data: tiles in a split tree
+(`page_layout.dart`), each page with its own undo history, saved to app storage after every change. Tiles split,
+close, resize by their dividers, and move by dragging a tile's header onto one side of another. Features register tile
+kinds through `TileSource` (live readouts so far). The command palette (Ctrl+K or ⌘K, or the search button in the rail)
+reaches every place and every item that can go in a tile. A widget test runs the
 whole path against the simulator, and `flutter build web` builds. CI now installs Flutter 3.50.0 and runs both
 packages' analysis, formatting and tests plus the rule checks.
 
@@ -148,8 +153,8 @@ packages' analysis, formatting and tests plus the rule checks.
    core's `PortFinder`: flutter_libserialport on desktop (macOS lists `cu` devices only; the serial entitlement is
    set) and Web Serial through a hand-written `dart:js_interop` binding, tested in Chrome against a fake port built
    from real streams. Neither has met real hardware: the bench test is the first time. flutter_libserialport is MIT
-   and bundles libserialport (LGPL-3.0, linked dynamically). Still to come: the workspace (pages, tiles, split tree,
-   command palette) in place of the plain rail, instruments beyond the readout, the URL manifest source (its format
+   and bundles libserialport (LGPL-3.0, linked dynamically). Still to come: curated read-only pages and the inspector,
+   a menu command for every drag, instruments beyond the readout, the URL manifest source (its format
    waits for the S3 bucket), and the `main_mobile.dart` root.
 
 ## Questions for Kurt

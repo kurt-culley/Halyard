@@ -1,38 +1,100 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/services.dart';
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../workspace/choice_dialog.dart';
+import '../workspace/page_layout.dart';
+import '../workspace/strings.dart';
+import '../workspace/tile_source.dart';
+import '../workspace/workspace_controller.dart';
 import 'desktop_router.dart';
 
-/// The desktop frame: a navigation rail beside the current page, and a status bar with the link and session state.
+/// The desktop frame: a navigation rail beside the current page, a status bar with the link and session state, and
+/// the command palette (Ctrl+K, or ⌘K on a Mac).
 @RoutePage()
 class DesktopShellPage extends StatelessWidget {
   const DesktopShellPage({super.key});
 
+  static const _destinations = [
+    ('Connect', Icons.cable),
+    ('Live', Icons.speed),
+    (WorkspaceStrings.pages, Icons.dashboard_customize),
+    ('Bench test', Icons.fact_check),
+  ];
+  static const _pagesTab = 2;
+
+  /// Every place and action, then every item that can go in a tile.
+  static Future<void> openPalette(BuildContext context, TabsRouter tabs) async {
+    final w = context.read<WorkspaceController>();
+    final commands = <(String, void Function())>[
+      for (final (i, (label, _)) in _destinations.indexed) ('Go to $label', () => tabs.setActiveIndex(i)),
+      (
+        WorkspaceStrings.newPage,
+        () {
+          w.addPage();
+          tabs.setActiveIndex(_pagesTab);
+        },
+      ),
+      if (w.canUndo) ('${WorkspaceStrings.undo} (${w.page.name})', w.undo),
+      if (w.canRedo) ('${WorkspaceStrings.redo} (${w.page.name})', w.redo),
+      for (final source in context.read<List<TileSource>>())
+        for (final ch in source.choices)
+          (
+            WorkspaceStrings.showInTile(ch.label),
+            () {
+              w.edit((p) => _addTile(p, ch.content));
+              tabs.setActiveIndex(_pagesTab);
+            },
+          ),
+    ];
+    final run = await showChoiceDialog(context, title: WorkspaceStrings.palette, choices: commands);
+    run?.call();
+  }
+
+  /// Fills the page's first empty tile, or splits the last tile.
+  static PageLayout _addTile(PageLayout p, TileContent content) {
+    final empty = p.tiles.where((t) => t.content.isEmpty).firstOrNull;
+    return empty != null ? p.setContent(empty.id, content) : p.split(p.tiles.last.id, DropSide.right, content);
+  }
+
   @override
   Widget build(BuildContext context) => AutoTabsRouter(
-    routes: const [ConnectRoute(), LiveRoute(), BenchRoute()],
+    routes: const [ConnectRoute(), LiveRoute(), WorkspaceRoute(), BenchRoute()],
     builder: (context, child) {
       final tabs = AutoTabsRouter.of(context);
-      return Scaffold(
-        body: Row(
-          children: [
-            NavigationRail(
-              selectedIndex: tabs.activeIndex,
-              onDestinationSelected: tabs.setActiveIndex,
-              labelType: NavigationRailLabelType.all,
-              destinations: const [
-                NavigationRailDestination(icon: Icon(Icons.cable), label: Text('Connect')),
-                NavigationRailDestination(icon: Icon(Icons.speed), label: Text('Live')),
-                NavigationRailDestination(icon: Icon(Icons.fact_check), label: Text('Bench test')),
+      return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => openPalette(context, tabs),
+          const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => openPalette(context, tabs),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            body: Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: tabs.activeIndex,
+                  onDestinationSelected: tabs.setActiveIndex,
+                  labelType: NavigationRailLabelType.all,
+                  trailing: IconButton(
+                    tooltip: '${WorkspaceStrings.palette} (Ctrl+K)',
+                    icon: const Icon(Icons.search),
+                    onPressed: () => openPalette(context, tabs),
+                  ),
+                  destinations: [
+                    for (final (label, icon) in _destinations)
+                      NavigationRailDestination(icon: Icon(icon), label: Text(label)),
+                  ],
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: child),
               ],
             ),
-            const VerticalDivider(width: 1),
-            Expanded(child: child),
-          ],
+            bottomNavigationBar: const _StatusBar(),
+          ),
         ),
-        bottomNavigationBar: const _StatusBar(),
       );
     },
   );

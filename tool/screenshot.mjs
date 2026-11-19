@@ -1,7 +1,7 @@
 // Screenshots of the web build for reviews: serve app/build/web, then run this with Node 22.
 // Headless Chrome over the DevTools protocol: open a URL, run optional steps, save screenshots.
 // usage: node shot.mjs <url> <out.png> [steps.json]
-// steps: [{wait:ms} | {click:[x,y]} | {shot:"file.png"} | {files:[path...]} | {key:"Enter"}]
+// steps: [{wait:ms} | {click:[x,y]} | {shot:"file.png"} | {files:[path...]} | {type:"text"} | {key:"Enter"}]
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [url, out, stepsFile] = process.argv.slice(2);
@@ -34,6 +34,8 @@ for (const s of steps) {
     const [x, y] = s.click;
     for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
   }
+  if (s.type) await send('Input.insertText', { text: s.type });
+  if (s.key) for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: s.key, code: s.key, windowsVirtualKeyCode: s.key === 'Enter' ? 13 : 0, text: s.key === 'Enter' && type === 'keyDown' ? '\r' : undefined });
   if (s.files) { for (let i = 0; i < 30 && !chooser; i++) await sleep(100); if (chooser) await send('DOM.setFileInputFiles', { files: s.files, backendNodeId: chooser.backendNodeId }); chooser = null; }
   if (s.shot) { const r = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync(s.shot, Buffer.from(r.result.data, 'base64')); console.log('saved', s.shot); }
 }
