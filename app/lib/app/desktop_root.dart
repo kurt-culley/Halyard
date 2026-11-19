@@ -38,7 +38,7 @@ class _DesktopRootState extends State<DesktopRoot> {
   final _messenger = GlobalKey<ScaffoldMessengerState>();
   SavedDefinitions? _saved;
   WorkspaceController? _workspace;
-  late final List<TileSource> _tiles = [LiveTiles(_session)];
+  late final List<TileSource> _tiles = [LiveTiles(_session), LiveTiles(_session, trace: true)];
 
   @override
   void initState() {

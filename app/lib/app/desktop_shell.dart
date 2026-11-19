@@ -53,10 +53,12 @@ class DesktopShellPage extends StatelessWidget {
     run?.call();
   }
 
-  /// Fills the page's first empty tile, or splits the last tile.
+  /// Fills the page's first empty tile, or splits the tile with the most room.
   static PageLayout _addTile(PageLayout p, TileContent content) {
     final empty = p.tiles.where((t) => t.content.isEmpty).firstOrNull;
-    return empty != null ? p.setContent(empty.id, content) : p.split(p.tiles.last.id, DropSide.right, content);
+    if (empty != null) return p.setContent(empty.id, content);
+    final (id, side) = p.roomiest();
+    return p.split(id, side, content);
   }
 
   @override

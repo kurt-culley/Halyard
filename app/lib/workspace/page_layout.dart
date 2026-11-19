@@ -99,6 +99,30 @@ final class PageLayout {
 
   TileNode? tile(int id) => tiles.where((t) => t.id == id).firstOrNull;
 
+  /// The tile with the most room on a page of [aspect] (width over height), and the side to split it on so both
+  /// halves stay closest to square: beside it when it is wider than tall, below it otherwise.
+  (int, DropSide) roomiest({double aspect = 1.6}) {
+    (int, double, double)? best;
+    void walk(LayoutNode n, double w, double h) {
+      switch (n) {
+        case TileNode():
+          if (best == null || w * h > best!.$2 * best!.$3 + 1e-9) best = (n.id, w, h);
+        case SplitNode(:final axis, :final fraction, :final first, :final second):
+          if (axis == SplitAxis.row) {
+            walk(first, w * fraction, h);
+            walk(second, w * (1 - fraction), h);
+          } else {
+            walk(first, w, h * fraction);
+            walk(second, w, h * (1 - fraction));
+          }
+      }
+    }
+
+    walk(root, aspect, 1);
+    final (id, w, h) = best!;
+    return (id, w >= h ? DropSide.right : DropSide.bottom);
+  }
+
   PageLayout renamed(String name) => PageLayout(name, root, nextId);
 
   /// Puts [content] in a new tile beside tile [id] on [side].

@@ -55,7 +55,8 @@ link), **pages** (the workspace, below) and **bench** (the checklist, with block
 copyable report). The workspace (`app/lib/workspace/`) holds user pages as plain data: tiles in a split tree
 (`page_layout.dart`), each page with its own undo history, saved to app storage after every change. Tiles split,
 close, resize by their dividers, and move by dragging a tile's header onto one side of another. Features register tile
-kinds through `TileSource` (live readouts so far). The command palette (Ctrl+K or ⌘K, or the search button in the rail)
+kinds through `TileSource`: live readouts (scaled to the tile) and live traces (`instruments/trace.dart`, about a
+minute of history). A tile added from the palette goes into the roomiest tile, split along its longer side. The command palette (Ctrl+K or ⌘K, or the search button in the rail)
 reaches every place and every item that can go in a tile. A widget test runs the
 whole path against the simulator, and `flutter build web` builds. CI now installs Flutter 3.50.0 and runs both
 packages' analysis, formatting and tests plus the rule checks.

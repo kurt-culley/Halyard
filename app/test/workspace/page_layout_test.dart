@@ -39,6 +39,16 @@ void main() {
     expect(identical(p.move(0, 99, DropSide.left), p), isTrue);
   });
 
+  test('new tiles go where there is most room, split along the longer side', () {
+    var p = const PageLayout.blank('x');
+    expect(p.roomiest(), (0, DropSide.right));
+    p = p.split(0, DropSide.right);
+    // Two 0.8 × 1 halves: taller than wide, so the first is split below.
+    expect(p.roomiest(), (0, DropSide.bottom));
+    p = p.split(0, DropSide.bottom);
+    expect(p.roomiest().$1, p.tiles.last.id);
+  });
+
   test('a page survives JSON', () {
     final p = const PageLayout.blank('Boost').setContent(0, _rpm).split(0, DropSide.bottom, _map).resize(2, 0.3);
     final back = PageLayout.fromJson((jsonDecode(jsonEncode(p.toJson())) as Map).cast());
