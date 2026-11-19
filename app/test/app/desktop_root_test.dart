@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
+import 'package:halyard/instruments/map_grid.dart';
 import 'package:halyard/instruments/readout.dart';
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -112,6 +113,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.byType(Readout), findsWidgets);
+
+    // A table, read only, with its live cell.
+    await tester.tap(find.text('Tables'));
+    await _settle(tester, 3);
+    await tester.tap(find.byType(ListTile).first);
+    await _settle(tester, 3);
+    expect(find.byType(MapGrid), findsOneWidget);
 
     // A tile on a user page, chosen from the command palette.
     await tester.tap(find.byIcon(Icons.search));

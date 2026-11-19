@@ -20,10 +20,11 @@ class DesktopShellPage extends StatelessWidget {
   static const _destinations = [
     ('Connect', Icons.cable),
     ('Live', Icons.speed),
+    ('Tables', Icons.grid_on),
     (WorkspaceStrings.pages, Icons.dashboard_customize),
     ('Bench test', Icons.fact_check),
   ];
-  static const _pagesTab = 2;
+  static const _pagesTab = 3;
 
   /// Every place and action, then every item that can go in a tile.
   static Future<void> openPalette(BuildContext context, TabsRouter tabs) async {
@@ -63,7 +64,7 @@ class DesktopShellPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AutoTabsRouter(
-    routes: const [ConnectRoute(), LiveRoute(), WorkspaceRoute(), BenchRoute()],
+    routes: const [ConnectRoute(), LiveRoute(), TablesRoute(), WorkspaceRoute(), BenchRoute()],
     builder: (context, child) {
       final tabs = AutoTabsRouter.of(context);
       return CallbackShortcuts(

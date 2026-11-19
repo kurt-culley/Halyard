@@ -75,6 +75,22 @@ class LiveRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [TablesPage]
+class TablesRoute extends PageRouteInfo<void> {
+  const TablesRoute({List<PageRouteInfo>? children})
+    : super(TablesRoute.name, initialChildren: children);
+
+  static const String name = 'TablesRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const TablesPage();
+    },
+  );
+}
+
+/// generated route for
 /// [WorkspacePage]
 class WorkspaceRoute extends PageRouteInfo<void> {
   const WorkspaceRoute({List<PageRouteInfo>? children})
