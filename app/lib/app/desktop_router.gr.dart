@@ -155,6 +155,22 @@ class TablesRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [TriggerPage]
+class TriggerRoute extends PageRouteInfo<void> {
+  const TriggerRoute({List<PageRouteInfo>? children})
+    : super(TriggerRoute.name, initialChildren: children);
+
+  static const String name = 'TriggerRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const TriggerPage();
+    },
+  );
+}
+
+/// generated route for
 /// [WorkspacePage]
 class WorkspaceRoute extends PageRouteInfo<void> {
   const WorkspaceRoute({List<PageRouteInfo>? children})

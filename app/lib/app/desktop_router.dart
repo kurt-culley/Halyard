@@ -8,6 +8,7 @@ import '../features/live/live_page.dart';
 import '../features/logging/logging_page.dart';
 import '../features/parameters/parameters_page.dart';
 import '../features/tables/tables_page.dart';
+import '../features/trigger/trigger_page.dart';
 import '../workspace/workspace_page.dart';
 import 'desktop_shell.dart';
 
@@ -28,6 +29,7 @@ class DesktopRouter extends RootStackRouter {
         AutoRoute(page: CalibrationRoute.page, path: 'calibration'),
         AutoRoute(page: WorkspaceRoute.page, path: 'pages'),
         AutoRoute(page: LoggingRoute.page, path: 'logging'),
+        AutoRoute(page: TriggerRoute.page, path: 'trigger'),
         AutoRoute(page: FaultsRoute.page, path: 'faults'),
         AutoRoute(page: BenchRoute.page, path: 'bench'),
       ],

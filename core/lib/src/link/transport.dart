@@ -98,9 +98,9 @@ final class SwitchablePolicy implements FramePolicy {
   bool allows(Frame f) => !readOnly || const ReadOnlyPolicy().allows(f);
 }
 
-/// Reads only. Lets through requests that read, the RAM-only switches live data needs, and the lifesign; refuses
-/// everything that changes the ECU, including the host's answers during a firmware transfer. Used on mobile and in
-/// bench mode.
+/// Reads only. Lets through requests that read, the RAM-only switches live data and the trigger scope need, and
+/// the lifesign; refuses everything that changes the ECU, including the host's answers during a firmware transfer.
+/// Used on mobile and in bench mode.
 final class ReadOnlyPolicy implements FramePolicy {
   const ReadOnlyPolicy();
 
@@ -110,7 +110,7 @@ final class ReadOnlyPolicy implements FramePolicy {
     (2, 1), (2, 3), //               read a driver, CAN reserved ids
     (4, 0), (4, 1), (4, 5), //       identity, calibration hash, password-lock state
     (6, 0), (6, 1), (6, 5), (6, 6), (6, 7), // on-board log reads
-    (7, 0), //                       trigger scope support
+    (7, 0), (7, 1), //               trigger scope support, scope on/off (RAM; throttle duty is class 8)
     (9, 0), (9, 1), (9, 2), (9, 3), // fault log reads
   };
 

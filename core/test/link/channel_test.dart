@@ -162,7 +162,9 @@ void main() {
       expect(settle(async, c.request(regionInfoAnswer(0, 0, 0, 0, 0))).failure, Failure.blocked);
       expect(settle(async, c.request(getTableRequest(4100))).ok, isTrue);
       expect(settle(async, c.request(ackFrame())).ok, isTrue);
-      expect(blocked.map((f) => (f.cls, f.cmd)).toList(), [(1, 6), (4, 3), (5, 4), (5, 1)]);
+      expect(settle(async, c.request(setDbwDutyRequest(0, 50))).failure, Failure.blocked);
+      expect(blocked.map((f) => (f.cls, f.cmd)).toList(), [(1, 6), (4, 3), (5, 4), (5, 1), (8, 0)]);
+      expect(const ReadOnlyPolicy().allows(triggerSetStateRequest(true, [0, 1])), isTrue);
       expect(t.written.map((f) => (f.cls, f.cmd)).toList(), [(1, 1), (0, 1)]);
     });
   });

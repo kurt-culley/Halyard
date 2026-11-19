@@ -9,6 +9,7 @@ import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
 import 'package:halyard/features/tables/tables_controller.dart';
+import 'package:halyard/features/trigger/trigger_controller.dart';
 import 'package:halyard/instruments/log_plot.dart';
 import 'package:halyard/instruments/map_grid.dart';
 import 'package:halyard/instruments/readout.dart';
@@ -268,6 +269,34 @@ void main() {
     await _settle(tester, 10);
     expect(ports.ecu.calibration.tables[id]!.z[0], 77.5);
     expect(c.checkedCount, 0);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('the trigger scope captures edges in read only, and live data comes back after', (tester) async {
+    await _bigWindow(tester);
+    await tester.pumpWidget(
+      DesktopRoot(ports: _FakePorts(_definition()), storage: _MemoryStorage(), folders: _NoFolders()),
+    );
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', _definition());
+    await tester.pump();
+    await tester.tap(find.text('Start demo'));
+    await _settle(tester, 20);
+
+    await tester.tap(find.text('Trigger'));
+    await _settle(tester, 3);
+    final c = tester.element(find.text('Trigger scope')).read<TriggerController>();
+    expect(c.available, isNotEmpty);
+    await tester.tap(find.text('Start'));
+    await _settle(tester, 10);
+    expect(c.log.points, isNotEmpty);
+    expect(c.log.frequency, greaterThan(0));
+    await tester.tap(find.text('Stop'));
+    await _settle(tester, 5);
+    expect(c.running, isFalse);
+    expect(find.textContaining('Online'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

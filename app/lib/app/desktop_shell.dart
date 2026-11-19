@@ -26,6 +26,7 @@ class DesktopShellPage extends StatelessWidget {
     ('Calibration', Icons.description_outlined, CalibrationRoute()),
     (WorkspaceStrings.pages, Icons.dashboard_customize, WorkspaceRoute()),
     ('Logging', Icons.timeline, LoggingRoute()),
+    ('Trigger', Icons.ssid_chart, TriggerRoute()),
     ('Faults', Icons.report_problem_outlined, FaultsRoute()),
     ('Bench test', Icons.fact_check, BenchRoute()),
   ];
