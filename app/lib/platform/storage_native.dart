@@ -9,6 +9,20 @@ Future<AppStorage> storage() async => FileStorage(await getApplicationSupportDir
 
 FolderPicker folders() => _NativeFolders();
 
+FileSaver saver() => const _SaveDialog();
+
+final class _SaveDialog implements FileSaver {
+  const _SaveDialog();
+
+  @override
+  Future<bool> save(String suggestedName, Uint8List bytes) async {
+    final at = await getSaveLocation(suggestedName: suggestedName);
+    if (at == null) return false;
+    await File(at.path).writeAsBytes(bytes, flush: true);
+    return true;
+  }
+}
+
 /// Files under a directory (the app support directory in the app).
 final class FileStorage implements AppStorage {
   FileStorage(this.root);

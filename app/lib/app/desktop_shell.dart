@@ -22,6 +22,7 @@ class DesktopShellPage extends StatelessWidget {
     ('Live', Icons.speed),
     ('Tables', Icons.grid_on),
     (WorkspaceStrings.pages, Icons.dashboard_customize),
+    ('Logging', Icons.timeline),
     ('Faults', Icons.report_problem_outlined),
     ('Bench test', Icons.fact_check),
   ];
@@ -65,7 +66,15 @@ class DesktopShellPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AutoTabsRouter(
-    routes: const [ConnectRoute(), LiveRoute(), TablesRoute(), WorkspaceRoute(), FaultsRoute(), BenchRoute()],
+    routes: const [
+      ConnectRoute(),
+      LiveRoute(),
+      TablesRoute(),
+      WorkspaceRoute(),
+      LoggingRoute(),
+      FaultsRoute(),
+      BenchRoute(),
+    ],
     builder: (context, child) {
       final tabs = AutoTabsRouter.of(context);
       return CallbackShortcuts(

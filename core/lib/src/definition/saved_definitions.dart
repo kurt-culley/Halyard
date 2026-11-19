@@ -7,27 +7,9 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+import '../session/host_files.dart';
 import 'definition_library.dart';
 import 'device_file.dart';
-
-/// The app's own files: the app support directory natively, the origin-private file system on the web. Names are
-/// relative paths with `/` separators.
-abstract interface class AppStorage {
-  /// Null when there is no such file.
-  Future<Uint8List?> read(String name);
-  Future<void> write(String name, Uint8List bytes);
-
-  /// Does nothing when there is no such file.
-  Future<void> delete(String name);
-}
-
-/// A folder of files the user picks, where the platform allows it (desktop, not the web).
-abstract interface class FolderPicker {
-  bool get available;
-
-  /// The name and text of each file in the chosen folder with [extension] (".medef"); null when cancelled.
-  Future<List<(String, String)>?> pick(String extension);
-}
 
 final class SavedDefinitions {
   SavedDefinitions(this._storage, this.library);

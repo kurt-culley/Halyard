@@ -8,6 +8,25 @@ Future<AppStorage> storage() async => OpfsStorage(await web.window.navigator.sto
 
 FolderPicker folders() => const _NoFolders();
 
+FileSaver saver() => const _Download();
+
+/// A browser download of the bytes.
+final class _Download implements FileSaver {
+  const _Download();
+
+  @override
+  Future<bool> save(String suggestedName, Uint8List bytes) async {
+    final blob = web.Blob([bytes.toJS].toJS);
+    final url = web.URL.createObjectURL(blob);
+    (web.document.createElement('a') as web.HTMLAnchorElement)
+      ..href = url
+      ..download = suggestedName
+      ..click();
+    web.URL.revokeObjectURL(url);
+    return true;
+  }
+}
+
 /// The origin-private file system: the browser's own storage for this site, a working copy the user exports from.
 final class OpfsStorage implements AppStorage {
   OpfsStorage(this.root);

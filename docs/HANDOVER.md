@@ -52,7 +52,10 @@ Step 2 (desktop read-only slice) has started: `app/` is a Flutter 3.50 package i
 session behind the read-only policy, a definition library and the chosen link. The shell has a navigation rail and a
 status bar; the features are **connect** (add definition files, a serial port, demo mode on the simulator), **live** (a readout per
 link), **tables** (maps and curves read only, by category, shaded by value with the live cell outlined;
-`instruments/map_grid.dart`), **faults** (codes with state and counts, and the history; clearing waits for the
+`instruments/map_grid.dart`), **logging** (record every live channel to CSV at 10 Hz with marks, save it through `FileSaver`: a save
+dialog natively, a download on the web; open a CSV and plot chosen channels in stacked lanes, reduced with MinMaxLTTB
+so single-sample spikes survive; `instruments/log_plot.dart`; the `LoggingInfo.xml` index waits on its question),
+**faults** (codes with state and counts, and the history; clearing waits for the
 write gate; demo mode seeds the simulator's fault log), **pages** (the workspace, below) and **bench** (the checklist, with blocked writes, requests sent and a
 copyable report). The workspace (`app/lib/workspace/`) holds user pages as plain data: tiles in a split tree
 (`page_layout.dart`), each page with its own undo history, saved to app storage after every change. Tiles split,
@@ -74,7 +77,7 @@ packages' analysis, formatting and tests plus the rule checks.
 | Read-only bench test: the checklist of reads (identity, definition, a table and a driver, hash, 3 s of live data, password state, CAN ids, on-board logging, faults, trigger) through the read-only policy, and the plain-text report with blocked writes and requests sent. Passes against the simulator; it is what to run first on the real ECU | `core/lib/src/session/bench_check.dart` |
 | Import-rule and branding checks | `tool/check_imports.dart`, `tool/check_branding.dart` |
 | Live data store | `core/lib/src/live/` |
-| Definition library: definitions the user adds, matched to the connected ECU (exact model, else generic); kept between runs by content hash in app storage (`AppStorage`: app support directory natively, the origin-private file system on the web), and a whole folder can be added on desktop | `core/lib/src/definition/definition_library.dart`, `saved_definitions.dart`, `app/lib/platform/storage*.dart` |
+| Definition library: definitions the user adds, matched to the connected ECU (exact model, else generic); kept between runs by content hash in app storage (`AppStorage` in `core/lib/src/session/host_files.dart`: app support directory natively, the origin-private file system on the web), and a whole folder can be added on desktop | `core/lib/src/definition/definition_library.dart`, `saved_definitions.dart`, `app/lib/platform/storage*.dart` |
 | Fault codes, records, freeze frames, active-code bits, fault-log reader; simulated fault log | `core/lib/src/faults/`, `core/lib/src/sim/sim_faults.dart` |
 | Measurement units and conversions (Fahrenheit input fixed) | `core/lib/src/units/` |
 | Custom CAN: bit packing, CAN ids, the 3780-byte configuration, checks, OEM reserved ids; DBC file reading | `core/lib/src/can/` |

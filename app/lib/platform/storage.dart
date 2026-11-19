@@ -7,3 +7,6 @@ Future<AppStorage> platformStorage() => impl.storage();
 
 /// Picking a folder of files, where the platform allows it.
 FolderPicker platformFolders() => impl.folders();
+
+/// Saving files the user keeps on this platform.
+FileSaver platformSaver() => impl.saver();

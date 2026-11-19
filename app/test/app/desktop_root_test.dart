@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
+import 'package:halyard/features/logging/logging_controller.dart';
+import 'package:halyard/instruments/log_plot.dart';
 import 'package:halyard/instruments/map_grid.dart';
 import 'package:halyard/instruments/readout.dart';
 import 'package:halyard_core/halyard_core.dart';
@@ -120,6 +122,19 @@ void main() {
     await tester.tap(find.byType(ListTile).first);
     await _settle(tester, 3);
     expect(find.byType(MapGrid), findsOneWidget);
+
+    // Recording a log, then reviewing it.
+    await tester.tap(find.text('Logging'));
+    await _settle(tester, 3);
+    await tester.tap(find.text('Start'));
+    await _settle(tester, 20);
+    await tester.tap(find.text('Stop'));
+    await _settle(tester, 2);
+    expect(find.textContaining('samples,'), findsOneWidget);
+    final logging = tester.element(find.text('Review')).read<LoggingController>();
+    logging.openLog('demo.csv', 'Time, Marker,RPM,MAP\r\n0.00,0,800,30\r\n0.10,1,1200,45\r\n0.20,0,1500,60\r\n');
+    await _settle(tester, 2);
+    expect(find.byType(LogPlot), findsOneWidget);
 
     // The fault log, read only.
     await tester.tap(find.text('Faults'));

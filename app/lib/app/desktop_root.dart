@@ -12,12 +12,13 @@ import 'desktop_router.dart';
 /// The desktop and web composition root: one connection and session for the app's life, the user's saved
 /// definitions, and the link the connect feature chooses. Until the write gate exists the link only lets reads through.
 class DesktopRoot extends StatefulWidget {
-  const DesktopRoot({super.key, this.ports, this.storage, this.folders});
+  const DesktopRoot({super.key, this.ports, this.storage, this.folders, this.saver});
 
   /// The platform's when null; tests pass their own.
   final PortFinder? ports;
   final AppStorage? storage;
   final FolderPicker? folders;
+  final FileSaver? saver;
 
   @override
   State<DesktopRoot> createState() => _DesktopRootState();
@@ -27,6 +28,7 @@ class _DesktopRootState extends State<DesktopRoot> {
   final _definitions = DefinitionLibrary();
   late final _ports = widget.ports ?? platformPorts();
   late final _folders = widget.folders ?? platformFolders();
+  late final _saver = widget.saver ?? platformSaver();
   final _link = ValueNotifier<TransportOpener?>(null);
   late final _connection = Connection((baud) {
     final open = _link.value;
@@ -86,6 +88,7 @@ class _DesktopRootState extends State<DesktopRoot> {
         Provider.value(value: _tiles),
         Provider.value(value: _ports),
         Provider.value(value: _folders),
+        Provider.value(value: _saver),
         ChangeNotifierProvider.value(value: _link),
         Provider.value(value: _connection),
         Provider.value(value: _session),
