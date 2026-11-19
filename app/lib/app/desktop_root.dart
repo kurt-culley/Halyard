@@ -45,7 +45,8 @@ class _DesktopRootState extends State<DesktopRoot> {
   final _messenger = GlobalKey<ScaffoldMessengerState>();
   SavedDefinitions? _saved;
   WorkspaceController? _workspace;
-  late final List<TileSource> _tiles = [LiveTiles(_session), LiveTiles(_session, trace: true)];
+  AppStorage? _storage;
+  late final List<TileSource> _tiles = [for (final style in LiveStyle.values) LiveTiles(_session, style: style)];
 
   @override
   void initState() {
@@ -65,6 +66,7 @@ class _DesktopRootState extends State<DesktopRoot> {
     await workspace.load();
     if (!mounted) return;
     setState(() {
+      _storage = storage;
       _saved = saved;
       _workspace = workspace;
     });
@@ -92,6 +94,7 @@ class _DesktopRootState extends State<DesktopRoot> {
     if (saved == null || workspace == null) return const ColoredBox(color: Colors.white);
     return MultiProvider(
       providers: [
+        Provider<AppStorage>.value(value: _storage!),
         Provider.value(value: saved),
         ChangeNotifierProvider.value(value: workspace),
         Provider.value(value: _tiles),

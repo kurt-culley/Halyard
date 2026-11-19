@@ -8,24 +8,33 @@ import '../../instruments/readout.dart';
 import '../../instruments/trace.dart';
 import '../../workspace/page_layout.dart';
 import '../../workspace/tile_source.dart';
+import 'live_dial.dart';
 import 'strings.dart';
 
-/// Live tiles for the workspace, one link each: a readout, or a trace of its recent history.
+/// How a live tile shows its link.
+enum LiveStyle { readout, trace, gauge }
+
+/// Live tiles for the workspace, one link each: a readout, a trace of its recent history, or a dial.
 final class LiveTiles implements TileSource {
-  LiveTiles(this._session, {this.trace = false}) {
+  LiveTiles(this._session, {this.style = LiveStyle.readout}) {
     _session.states.listen((_) => _changes.value++);
   }
 
   final Session _session;
-  final bool trace;
+  final LiveStyle style;
   final _changes = ValueNotifier(0);
 
+  /// Saved pages name tiles by these.
   @override
-  String get kind => trace ? 'trace' : 'readout';
+  String get kind => style.name;
 
   String _name(LinkDef l) {
     final n = l.name ?? LiveStrings.link(l.id);
-    return trace ? LiveStrings.trend(n) : n;
+    return switch (style) {
+      LiveStyle.readout => n,
+      LiveStyle.trace => LiveStrings.trend(n),
+      LiveStyle.gauge => LiveStrings.gauge(n),
+    };
   }
 
   @override
@@ -46,8 +55,16 @@ final class LiveTiles implements TileSource {
   }
 
   @override
-  Widget build(BuildContext context, TileContent content) =>
-      trace ? _LiveTrace(session: _session, id: content.item!) : _LiveReadout(session: _session, id: content.item!);
+  Widget build(BuildContext context, TileContent content) => switch (style) {
+    LiveStyle.readout => _LiveReadout(session: _session, id: content.item!),
+    LiveStyle.trace => _LiveTrace(session: _session, id: content.item!),
+    LiveStyle.gauge => Padding(
+      padding: const EdgeInsets.all(8),
+      child: Center(
+        child: LiveDial(session: _session, id: content.item!),
+      ),
+    ),
+  };
 }
 
 class _LiveReadout extends StatefulWidget {
