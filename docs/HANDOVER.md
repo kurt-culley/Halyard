@@ -13,6 +13,9 @@ A cloud session needs `storage.googleapis.com` (the Flutter SDK from `flutter_in
 Since the app joined the workspace, `pub get` needs the Flutter SDK: run `flutter pub get` at the root, then `dart`
 from Flutter's `bin` for the core. As root, add `/opt/flutter` to git's `safe.directory`.
 
+The web app is published to GitHub Pages by `.github/workflows/pages.yml` on every push to main, at
+https://kurt-culley.github.io/Halyard/ (public, by Kurt's choice; it holds no vendor files).
+
 ## What this is
 
 Halyard is a ground-up rebuild of the ME360 tuning app in Flutter. The previous project, `../me360`, is a
