@@ -44,6 +44,7 @@ abstract final class TablesStrings {
   static const copy = 'Copy (Ctrl+C)';
   static const paste = 'Paste (Ctrl+V)';
   static const graph = 'Graph';
+  static const view3d = '3D';
   static const interpolateOutput = 'Interpolate Output';
   static const horizontally = 'Horizontally';
   static const vertically = 'Vertically';

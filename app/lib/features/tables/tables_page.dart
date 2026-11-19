@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../instruments/map_grid.dart';
+import '../../instruments/surface_3d.dart';
 import '../../instruments/table_chart.dart';
 import 'strings.dart';
 import 'tables_controller.dart';
@@ -84,6 +85,7 @@ class _Editor extends StatefulWidget {
 class _EditorState extends State<_Editor> {
   final _focus = FocusNode();
   bool _graph = true;
+  bool _surface = false;
 
   TablesController get c => widget.c;
 
@@ -334,6 +336,12 @@ class _EditorState extends State<_Editor> {
                 selected: c.follow,
                 onSelected: (_) => c.toggleFollow(),
               ),
+              if (view.isMap)
+                FilterChip(
+                  label: const Text(TablesStrings.view3d),
+                  selected: _surface,
+                  onSelected: (v) => setState(() => _surface = v),
+                ),
               FilterChip(
                 label: const Text(TablesStrings.graph),
                 selected: _graph,
@@ -349,29 +357,48 @@ class _EditorState extends State<_Editor> {
               focusNode: _focus,
               autofocus: true,
               onKeyEvent: _key,
-              child: MapGrid(
-                columns: view.columns,
-                rows: view.rows,
-                cells: view.cells,
-                shades: view.shades,
-                live: view.live,
-                selected: sel.selected,
-                current: cur,
-                tuned: c.tuned,
-                marks: {?c.markStart, ?c.markEnd},
-                onPress: (cell, p) {
-                  _focus.requestFocus();
-                  c.press(cell, shift: p.shift, ctrl: p.ctrl, right: p.right);
-                  if (p.right) _menu(cell, p.global, view);
-                },
-                onDrag: c.drag,
-                onRelease: c.release,
-                onDoubleTap: (cell) {
-                  if (cell == (0, 0)) return c.selectAll();
-                  c.press(cell);
-                  _setValue();
-                },
-              ),
+              child: _surface && view.isMap
+                  ? Surface3D(
+                      rows: view.rows.length,
+                      cols: view.columns.length,
+                      values: [for (final l in view.lines) ...l],
+                      selected: {
+                        for (final (r, c) in sel.selected)
+                          if (r > 0 && c > 0) (r - 1, c - 1),
+                      },
+                      live: view.live,
+                      xTicks: view.columns,
+                      yTicks: view.rows,
+                      xLabel: view.across,
+                      yLabel: view.down,
+                      onPick: (r, col) {
+                        _focus.requestFocus();
+                        c.press((r + 1, col + 1), shift: HardwareKeyboard.instance.isShiftPressed);
+                      },
+                    )
+                  : MapGrid(
+                      columns: view.columns,
+                      rows: view.rows,
+                      cells: view.cells,
+                      shades: view.shades,
+                      live: view.live,
+                      selected: sel.selected,
+                      current: cur,
+                      tuned: c.tuned,
+                      marks: {?c.markStart, ?c.markEnd},
+                      onPress: (cell, p) {
+                        _focus.requestFocus();
+                        c.press(cell, shift: p.shift, ctrl: p.ctrl, right: p.right);
+                        if (p.right) _menu(cell, p.global, view);
+                      },
+                      onDrag: c.drag,
+                      onRelease: c.release,
+                      onDoubleTap: (cell) {
+                        if (cell == (0, 0)) return c.selectAll();
+                        c.press(cell);
+                        _setValue();
+                      },
+                    ),
             ),
           ),
           if (_graph) ...[
