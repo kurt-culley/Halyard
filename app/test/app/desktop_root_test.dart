@@ -123,6 +123,13 @@ void main() {
     await _settle(tester, 3);
     expect(find.byType(MapGrid), findsOneWidget);
 
+    // Settings pages, read only.
+    await tester.tap(find.text('Settings').first);
+    await _settle(tester, 3);
+    await tester.tap(find.byType(ListTile).first);
+    await _settle(tester, 3);
+    expect(find.textContaining('Read only'), findsOneWidget);
+
     // Recording a log, then reviewing it.
     await tester.tap(find.text('Logging'));
     await _settle(tester, 3);

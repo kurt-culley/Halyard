@@ -5,6 +5,7 @@ import '../features/connect/connect_page.dart';
 import '../features/faults/faults_page.dart';
 import '../features/live/live_page.dart';
 import '../features/logging/logging_page.dart';
+import '../features/parameters/parameters_page.dart';
 import '../features/tables/tables_page.dart';
 import '../workspace/workspace_page.dart';
 import 'desktop_shell.dart';
@@ -22,6 +23,7 @@ class DesktopRouter extends RootStackRouter {
         AutoRoute(page: ConnectRoute.page, path: 'connect', initial: true),
         AutoRoute(page: LiveRoute.page, path: 'live'),
         AutoRoute(page: TablesRoute.page, path: 'tables'),
+        AutoRoute(page: ParametersRoute.page, path: 'parameters'),
         AutoRoute(page: WorkspaceRoute.page, path: 'pages'),
         AutoRoute(page: LoggingRoute.page, path: 'logging'),
         AutoRoute(page: FaultsRoute.page, path: 'faults'),

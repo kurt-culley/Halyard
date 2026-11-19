@@ -17,22 +17,24 @@ import 'desktop_router.dart';
 class DesktopShellPage extends StatelessWidget {
   const DesktopShellPage({super.key});
 
-  static const _destinations = [
-    ('Connect', Icons.cable),
-    ('Live', Icons.speed),
-    ('Tables', Icons.grid_on),
-    (WorkspaceStrings.pages, Icons.dashboard_customize),
-    ('Logging', Icons.timeline),
-    ('Faults', Icons.report_problem_outlined),
-    ('Bench test', Icons.fact_check),
+  /// The rail, in order: label, icon and the page it opens.
+  static const _destinations = <(String, IconData, PageRouteInfo)>[
+    ('Connect', Icons.cable, ConnectRoute()),
+    ('Live', Icons.speed, LiveRoute()),
+    ('Tables', Icons.grid_on, TablesRoute()),
+    ('Settings', Icons.tune, ParametersRoute()),
+    (WorkspaceStrings.pages, Icons.dashboard_customize, WorkspaceRoute()),
+    ('Logging', Icons.timeline, LoggingRoute()),
+    ('Faults', Icons.report_problem_outlined, FaultsRoute()),
+    ('Bench test', Icons.fact_check, BenchRoute()),
   ];
-  static const _pagesTab = 3;
+  static final _pagesTab = _destinations.indexWhere((d) => d.$3 is WorkspaceRoute);
 
   /// Every place and action, then every item that can go in a tile.
   static Future<void> openPalette(BuildContext context, TabsRouter tabs) async {
     final w = context.read<WorkspaceController>();
     final commands = <(String, void Function())>[
-      for (final (i, (label, _)) in _destinations.indexed) ('Go to $label', () => tabs.setActiveIndex(i)),
+      for (final (i, (label, _, _)) in _destinations.indexed) ('Go to $label', () => tabs.setActiveIndex(i)),
       (
         WorkspaceStrings.newPage,
         () {
@@ -66,15 +68,7 @@ class DesktopShellPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AutoTabsRouter(
-    routes: const [
-      ConnectRoute(),
-      LiveRoute(),
-      TablesRoute(),
-      WorkspaceRoute(),
-      LoggingRoute(),
-      FaultsRoute(),
-      BenchRoute(),
-    ],
+    routes: [for (final d in _destinations) d.$3],
     builder: (context, child) {
       final tabs = AutoTabsRouter.of(context);
       return CallbackShortcuts(
@@ -97,7 +91,7 @@ class DesktopShellPage extends StatelessWidget {
                     onPressed: () => openPalette(context, tabs),
                   ),
                   destinations: [
-                    for (final (label, icon) in _destinations)
+                    for (final (label, icon, _) in _destinations)
                       NavigationRailDestination(icon: Icon(icon), label: Text(label)),
                   ],
                 ),

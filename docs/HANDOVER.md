@@ -52,7 +52,8 @@ Step 2 (desktop read-only slice) has started: `app/` is a Flutter 3.50 package i
 session behind the read-only policy, a definition library and the chosen link. The shell has a navigation rail and a
 status bar; the features are **connect** (add definition files, a serial port, demo mode on the simulator), **live** (a readout per
 link), **tables** (maps and curves read only, by category, shaded by value with the live cell outlined;
-`instruments/map_grid.dart`), **logging** (record every live channel to CSV at 10 Hz with marks, save it through `FileSaver`: a save
+`instruments/map_grid.dart`), **settings** (the ECU's settings pages read only: sections, values in the user's units, settings a view
+constraint switches off, link choices), **logging** (record every live channel to CSV at 10 Hz with marks, save it through `FileSaver`: a save
 dialog natively, a download on the web; open a CSV and plot chosen channels in stacked lanes, reduced with MinMaxLTTB
 so single-sample spikes survive; `instruments/log_plot.dart`; the `LoggingInfo.xml` index waits on its question),
 **faults** (codes with state and counts, and the history; clearing waits for the
@@ -161,7 +162,8 @@ packages' analysis, formatting and tests plus the rule checks.
    set) and Web Serial through a hand-written `dart:js_interop` binding, tested in Chrome against a fake port built
    from real streams. Neither has met real hardware: the bench test is the first time. flutter_libserialport is MIT
    and bundles libserialport (LGPL-3.0, linked dynamically). Still to come: curated read-only pages and the inspector,
-   a menu command for every drag, instruments beyond the readout, the URL manifest source (its format
+   a menu command for every drag, more instruments (bar, dial, curve graph), a units preference page (the core's
+   `UnitPreferences` is fixed to the defaults in the app so far), the URL manifest source (its format
    waits for the S3 bucket), and the `main_mobile.dart` root.
 
 ## Questions for Kurt

@@ -30,6 +30,33 @@ const table = (id, name, category, cols, rows, in0, in1, out, x, y, z, inc) =>
     el("type", `T${rows}x${cols}`) + el('cols', String(cols)) + el('rows', String(rows)) +
     el('input_0_LinkId', String(in0)) + el('input_1_LinkId', String(in1)) + el('output_LinkId', String(out)) +
     el('incVal', String(inc)) + el('input_0', floats(x)) + el('input_1', floats(y)) + el('output', floats(z)));
+const param = (name, section, value, { options, units, tip, constraint } = {}) =>
+  el('DriverModelParam', el('name', name) + el('SectionName', section) + el('type', options ? 'ComboBox' : 'InputBox') +
+    el('value', String(value)) + (tip ? el('ToolTipText', tip) : '') +
+    (constraint ? el('ViewConstraint', el('ParamIndex', String(constraint[0])) + el('AcceptedValues', el('float', String(constraint[1])))) : '') +
+    (options ? el('options', options.map((o, i) => el('comboBoxOption', el('id', String(i)) + el('name', o))).join('')) : '') +
+    (units ? el('MeasurementUnitTypes', units.map((u) => `<${u} />`).join('')) : ''));
+const driver = (id, name, params, inputs = [], inputNames = []) =>
+  el('DriverModel', el('id', String(id)) + el('name', name) + el('numberOfConfigs', String(params.length)) + el('configParams', params.join('')) +
+    el('numberOfOutputs', '0') + el('outputLinkIds', '') + el('numberOfInputs', String(inputs.length)) + el('editableInputs', 'true') +
+    el('inputNames', inputNames.map((n) => el('string', n)).join('')) + el('inputLinkIds', inputs.map((i) => el('unsignedShort', String(i))).join('')));
+const drivers =
+  driver(8192, 'Fuel', [
+    param('Fueling Mode', 'Injection', 2, { options: ['Batch', 'Paired', 'Fully Seq'], tip: 'How the injectors are timed.' }),
+    param('Injector Size', 'Injection', 550, { tip: 'Flow at the reference pressure, cc/min.' }),
+    param('Use IAT in Algorithm', 'Air temperature', 1, { options: ['No', 'Yes'] }),
+    param('Default IAT', 'Air temperature', 25, { units: ['Celsius', 'Fahrenheit'], constraint: [2, 0], tip: 'Used when the sensor is not.' }),
+  ], [2, 5], ['Load sensor', 'Air temperature sensor']) +
+  driver(8223, 'Ignition', [
+    param('Mode', 'Outputs', 3, { options: ['Distributor', 'Wasted Spark', 'Wasted Spark - COPS', 'Fully Sequential'] }),
+    param('Dwell', 'Coils', 3.2, { tip: 'Coil charge time, ms.' }),
+  ]) +
+  driver(8222, 'Engine trigger', [
+    param('Trigger Pattern', 'Crank', 0, { options: ['36-1', 'Nissan SR', '60-2'] }),
+    param('Teeth', 'Crank', 36),
+    param('Cam A Pattern', 'Cam', 2, { options: ['None', 'Nissan SR', 'Single'] }),
+    param('Cam Sync After RPM', 'Cam', 0),
+  ]);
 const xml = '<ecu>' +
   el('DeviceDataInformationModel', el('ProductName', 'DEMO') + el('ModelName', 'BENCH') + el('Version', '1')) +
   `<links>${links.map(([id, name, unit, lo, hi]) => el('DataLinkModel', el('id', String(id)) + el('name', name) + el('measureUnit', unit) +
@@ -40,5 +67,5 @@ const xml = '<ecu>' +
   table(4098, 'Lambda target', 'Fuel', 16, 16, 1, 2, 6, rpm, map, lam, 0.01) +
   table(4099, 'Cranking fuel', 'Fuel', 16, 1, 4, 0, 9, clt, [0], clt.map((t) => 400 - 3 * t), 1) +
   table(4100, 'Intake temperature trim', 'Ignition', 16, 1, 5, 0, 8, iat, [0], iat.map((t) => (t > 30 ? -(t - 30) / 5 : 0)), 0.5) +
-  '</tables><drivers></drivers></ecu>';
+  `</tables><drivers>${drivers}</drivers></ecu>`;
 process.stdout.write(xml);

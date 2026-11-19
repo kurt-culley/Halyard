@@ -107,6 +107,22 @@ class LoggingRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [ParametersPage]
+class ParametersRoute extends PageRouteInfo<void> {
+  const ParametersRoute({List<PageRouteInfo>? children})
+    : super(ParametersRoute.name, initialChildren: children);
+
+  static const String name = 'ParametersRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const ParametersPage();
+    },
+  );
+}
+
+/// generated route for
 /// [TablesPage]
 class TablesRoute extends PageRouteInfo<void> {
   const TablesRoute({List<PageRouteInfo>? children})
