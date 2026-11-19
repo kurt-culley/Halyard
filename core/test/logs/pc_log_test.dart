@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:halyard_core/halyard_core.dart';
-import 'package:halyard_core/src/wire/bytes.dart' show fround;
 import 'package:test/test.dart';
 
 import '../support/vectors.dart';
