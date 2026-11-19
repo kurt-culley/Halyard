@@ -26,7 +26,7 @@ const ve = grid((n, m) => 35 + 55 * Math.sin(Math.PI * Math.min(1, n / 7500) * 0
 const ign = grid((n, m) => Math.max(2, 10 + 28 * Math.min(1, n / 4500) - 22 * Math.max(0, (m - 100) / 115)));
 const lam = grid((n, m) => (m > 100 ? 0.78 + 0.12 * (215 - m) / 115 : 1.0));
 const table = (id, name, category, cols, rows, in0, in1, out, x, y, z, inc) =>
-  el('TableModel', el('id', String(id)) + el('name', name) + el('category', category) + el('ViewInTree', 'true') +
+  el('TableModel', el('id', String(id)) + el('name', name) + el('category', category) + el('ViewInTree', 'true') + el('enabled', 'true') +
     el("type", `T${rows}x${cols}`) + el('cols', String(cols)) + el('rows', String(rows)) +
     el('input_0_LinkId', String(in0)) + el('input_1_LinkId', String(in1)) + el('output_LinkId', String(out)) +
     el('incVal', String(inc)) + el('input_0', floats(x)) + el('input_1', floats(y)) + el('output', floats(z)));

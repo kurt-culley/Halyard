@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
+import 'package:halyard/features/calibration/calibration_controller.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
@@ -46,6 +47,15 @@ final class _MemoryStorage implements AppStorage {
   Future<void> write(String name, Uint8List bytes) async => files[name] = bytes;
   @override
   Future<void> delete(String name) async => files.remove(name);
+}
+
+final class _KeptFiles implements FileSaver {
+  final files = <String, Uint8List>{};
+  @override
+  Future<bool> save(String suggestedName, Uint8List bytes) async {
+    files[suggestedName] = bytes;
+    return true;
+  }
 }
 
 final class _NoFolders implements FolderPicker {
@@ -225,5 +235,41 @@ void main() {
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 500));
     }
+  });
+
+  testWidgets('a calibration saves to a file, and a changed file is reviewed and sent', (tester) async {
+    final xml = _definition();
+    final ports = _FakePorts(xml);
+    final saver = _KeptFiles();
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: ports, storage: _MemoryStorage(), folders: _NoFolders(), saver: saver));
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', xml);
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await _settle(tester, 20);
+
+    await tester.tap(find.text('Calibration'));
+    await _settle(tester, 3);
+    final c = tester.element(find.text('Save to file…')).read<CalibrationController>();
+    await c.save();
+    expect(saver.files.keys.single, endsWith('.mecal'));
+
+    final file = readDeviceFile(utf8.decode(saver.files.values.single)).calibration;
+    final id = file.tables.keys.first;
+    file.tables[id]!.z[0] = 77.5;
+    c.open('changed.mecal', writeCalibrationFile(file));
+    await tester.pump();
+    expect(c.checkedCount, 1);
+    expect(c.visible.single.id, id);
+    await c.send();
+    await _settle(tester, 10);
+    expect(ports.ecu.calibration.tables[id]!.z[0], 77.5);
+    expect(c.checkedCount, 0);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
   });
 }

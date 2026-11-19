@@ -166,7 +166,34 @@ class WriteGate {
       ],
   ];
 
-  Future<WriteResult> sendCalibration(Calibration file) => _send(calibrationFrames(file));
+  /// Sends a whole calibration, then takes the ECU's read-back of each item into the calibration here, as the
+  /// original reloaded it after sending.
+  Future<WriteResult> sendCalibration(Calibration file) async {
+    final r = await _send(calibrationFrames(file));
+    final cal = _cal;
+    final ids = [
+      ...file.definition.tables.keys.where((id) => file.tables[id] != null),
+      ...file.definition.drivers.keys.where((id) => file.drivers[id] != null),
+    ];
+    for (final (k, id) in ids.indexed) {
+      final i = k * 3 + 2;
+      if (i >= r.results.length) break;
+      if (r.results[i].reply case final BlobReply b when b.ok) {
+        try {
+          if (cal.definition.tables[id] case final t?) {
+            cal.tables[id] = parseTableBlob(t, b.blob, cal.tables[id]);
+            _unstored.remove(id);
+            _dirty.remove(id);
+          } else if (cal.definition.drivers[id] case final d?) {
+            cal.drivers[id] = parseDriverBlob(d, b.blob, cal.drivers[id]);
+          }
+        } on BlobError {
+          // keeps what was here
+        }
+      }
+    }
+    return r;
+  }
 
   Future<WriteResult> _send(List<Frame> frames) async {
     if (frames.isEmpty) return const WriteResult([]);

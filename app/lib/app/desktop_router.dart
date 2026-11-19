@@ -1,6 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 
 import '../features/bench/bench_page.dart';
+import '../features/calibration/calibration_page.dart';
 import '../features/connect/connect_page.dart';
 import '../features/faults/faults_page.dart';
 import '../features/live/live_page.dart';
@@ -24,6 +25,7 @@ class DesktopRouter extends RootStackRouter {
         AutoRoute(page: LiveRoute.page, path: 'live'),
         AutoRoute(page: TablesRoute.page, path: 'tables'),
         AutoRoute(page: ParametersRoute.page, path: 'parameters'),
+        AutoRoute(page: CalibrationRoute.page, path: 'calibration'),
         AutoRoute(page: WorkspaceRoute.page, path: 'pages'),
         AutoRoute(page: LoggingRoute.page, path: 'logging'),
         AutoRoute(page: FaultsRoute.page, path: 'faults'),

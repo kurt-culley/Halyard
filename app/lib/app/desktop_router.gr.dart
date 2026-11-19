@@ -27,6 +27,22 @@ class BenchRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [CalibrationPage]
+class CalibrationRoute extends PageRouteInfo<void> {
+  const CalibrationRoute({List<PageRouteInfo>? children})
+    : super(CalibrationRoute.name, initialChildren: children);
+
+  static const String name = 'CalibrationRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const CalibrationPage();
+    },
+  );
+}
+
+/// generated route for
 /// [ConnectPage]
 class ConnectRoute extends PageRouteInfo<void> {
   const ConnectRoute({List<PageRouteInfo>? children})

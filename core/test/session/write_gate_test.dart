@@ -97,4 +97,29 @@ void simulatorTests(String xml) {
       s2.dispose();
     });
   });
+
+  test('a sent calibration reaches the simulated ECU and is read back here', () {
+    fakeAsync((async) {
+      final ecu = SimEcu(readDeviceFile(xml).calibration, reportPeriod: const Duration(milliseconds: 100));
+      final c = Connection((baud) => openSimulator(ecu, baud));
+      final s = Session(c, definitions: (_) => readDeviceFile(xml), now: () => DateTime.utc(2026).add(async.elapsed));
+      c.connect();
+      async.elapse(const Duration(seconds: 2));
+      final gate = WriteGate(s);
+      final file = s.calibration!.copy();
+      final id = file.tables.keys.first;
+      file.tables[id]!.z[0] = 33.25;
+      final only = Calibration(file.definition, tables: {id: file.tables[id]!}, drivers: {});
+      WriteResult? r;
+      gate.sendCalibration(only).then((x) => r = x);
+      async.elapse(const Duration(seconds: 2));
+      expect(r?.ok, isTrue);
+      expect(r!.results, hasLength(3));
+      expect(ecu.calibration.tables[id]!.z[0], 33.25);
+      expect(s.calibration!.tables[id]!.z[0], 33.25);
+      c.disconnect();
+      async.flushMicrotasks();
+      s.dispose();
+    });
+  });
 }
