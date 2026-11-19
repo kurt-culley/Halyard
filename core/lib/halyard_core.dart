@@ -37,6 +37,7 @@ export 'src/logs/trigger_log.dart';
 export 'src/session/bench_check.dart';
 export 'src/session/host_files.dart';
 export 'src/session/session.dart';
+export 'src/session/write_gate.dart';
 export 'src/sim/sim_datalog.dart';
 export 'src/sim/sim_ecu.dart';
 export 'src/sim/sim_faults.dart';

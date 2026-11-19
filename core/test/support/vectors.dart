@@ -29,3 +29,6 @@ Frame frameFromHex(String hex) {
 
 /// Vector bytes ("hex:..") back to a Uint8List.
 Uint8List bytesArg(Object? v) => fromHex((v! as String).substring(4));
+
+/// A frame in the vectors' hex form: type, cls, cmd, payload.
+String frameToHex(Frame f) => toHex(Uint8List.fromList([f.type, f.cls, f.cmd, ...f.payload]));

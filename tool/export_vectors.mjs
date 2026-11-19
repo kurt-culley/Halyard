@@ -4,7 +4,7 @@
 //
 // Writes core/test/vectors/{requests,replies,reporting,recognition,device_files,calibration_files,simulator,
 // session,live,faults,sim_faults,units,custom_can,sim_can,calibration_import,onboard_logs,dbc,pc_logging,log_review,
-// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values,table_operations,trigger_log}.json and copies the original-decoder fuzz corpus.
+// tuning_assistant,firmware,presets,live_recordings,playback,table_editing,driver_settings,link_values,table_operations,trigger_log,saving}.json and copies the original-decoder fuzz corpus.
 // Deterministic: the same engine produces byte-identical files.
 import { writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -827,6 +827,47 @@ write('live.json', liveCases);
     cases.push({ steps, saved: all, part: [String(Math.min(lo, hi)), String(Math.max(lo, hi)), part], areas, spans, load: { text, ...loaded } });
   }
   write('trigger_log.json', cases);
+}
+
+// ---------------------------------------------------------------- saving edits: the frames a table or driver save sends
+{
+  const { RequestCreator } = await src('requests.ts');
+  const service = { createEntityRequestCreator: () => new RequestCreator(null) };
+  const cases = [];
+  for (let c = 0; c < 30; c++) {
+    const xml = richXml();
+    let m;
+    try { m = DeviceDataModel.fromXml(xml, null); } catch { continue; }
+    const steps = [];
+    for (const t of [...m.allTables.values()].slice(0, 3)) {
+      t.protocolService = service;
+      // As after reading the table from the ECU: nothing changed yet.
+      t.input0.resetDirtyFlags(); t.input1.resetDirtyFlags(); t.output.resetDirtyFlags();
+      const edits = [];
+      for (let k = 0; k < int(8); k++) {
+        const elem = pick([0, 1, 2, 2, 2]);
+        const arr = elem === 0 ? t.input0 : elem === 1 ? t.input1 : t.output;
+        if (!arr.length) continue;
+        const i = int(arr.length), v = Math.fround(oddF32());
+        if (Number.isNaN(v)) continue; // a NaN's sign bit doesn't survive Dart's doubles on every platform
+        arr.set(i, v);
+        edits.push([elem, i, hex(f32(v))]);
+      }
+      const store = rnd() < 0.5;
+      steps.push({ table: t.id, edits, store, frames: (t.createMessageSaveFrames(store) ?? []).map(frameHex) });
+    }
+    for (const d of [...m.allDrivers.values()].slice(0, 2)) {
+      const creator = new RequestCreator(null);
+      const store = rnd() < 0.5;
+      creator.append(d, false, true, store);
+      steps.push({ driver: d.id, store, frames: creator.getRequests(true).map(frameHex) });
+    }
+    // sending a whole calibration (K01–K04): set, store, get for every table, then every driver
+    const all = new RequestCreator(null);
+    for (const e of [...m.allTables.values(), ...m.allDrivers.values()]) all.append(e, true, true, true);
+    cases.push({ xml, steps, calibration: all.getRequests(false).map(frameHex) });
+  }
+  write('saving.json', cases);
 }
 
 // ---------------------------------------------------------------- playback: pausing, seeking back and going live again
