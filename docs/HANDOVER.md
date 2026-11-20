@@ -157,7 +157,21 @@ Every feature below runs against the simulator in demo mode and has a widget tes
 - **Tuning:** the fuel tuning assistant over live history or a CSV log, with the original's default guesses, shaded
   suggestions, cell evidence, and Apply selected / high confidence through the gate (rounded to a tenth). The paint
   brush and CSV export are still to do.
-- The rail scrolls on short windows. The demo definition's tables are enabled and its target table is AFR.
+- **3D view** of maps (`instruments/surface_3d.dart`): drag to rotate, wheel to zoom, click to pick; keys edit as
+  in the grid.
+- **Playback strip** under every page (`features/logging/playback_*`): the original's track, steps, play, Live /
+  Not Live and the go-live question; saves the history in the recording format and loads one back.
+- **Onboard logging** ("On the ECU" tab on Logging): state, start/stop, rate and channels, stored logs with
+  download, erase and erase all, the original's refusals while logging or downloading.
+- **Faults:** Clear (retrying while busy) and Erase history (not while the engine runs), in the original's words.
+- **ECU tools:** clock, password protection, factory reset. The ECU answers a lock change as an unsolicited (4,4)
+  frame, and the original sent the clock and reset without waiting for a matched reply, so the controller does the
+  same. The simulator answers these three only when `ecuTools` is on (demo mode), so the scripted sessions still
+  match the TypeScript simulator.
+- **Preferences:** the four unit choices, held by the root as `ValueNotifier<UnitPreferences>` and kept in
+  `preferences.json`.
+- The rail scrolls on short windows. The demo definition's tables are enabled, its target table is AFR, its links
+  have categories and standard-logging flags, and it has the onboard logger's two links (1015, 1018).
 - `tool/screenshot.mjs` also does right-clicks, drags and repeated keys.
 
 ### What the third session changed and found
@@ -198,13 +212,12 @@ Every feature below runs against the simulator in demo mode and has a widget tes
    core's `PortFinder`: flutter_libserialport on desktop (macOS lists `cu` devices only; the serial entitlement is
    set) and Web Serial through a hand-written `dart:js_interop` binding, tested in Chrome against a fake port built
    from real streams. Neither has met real hardware: the bench test is the first time. flutter_libserialport is MIT
-   and bundles libserialport (LGPL-3.0, linked dynamically). Done since: table editing and graph, dials, calibration
-   save/load/review/send, trigger scope, tuning assistant (fourth session, above). Still to come: presets and import
-   from a calibration in the table menu, decimal places per table, the 3D view, the 1D table's own layout, editing
-   links, playback controls and live recordings, onboard log download, the CAN editor, the tuning assistant's paint
-   brush and export, autotune, ECU tools, firmware update, fault clearing, a menu command for every drag, a units
-   preference page (`UnitPreferences` is fixed to the defaults), the URL manifest source (waits for the S3 bucket), and
-   the `main_mobile.dart` root.
+   and bundles libserialport (LGPL-3.0, linked dynamically). Done since: see the fourth session above. Still to
+   come: presets and import from a calibration in the table menu, decimal places per table, the 1D table's own
+   layout, editing links, rolling live recordings to a folder, the CAN editor, the tuning assistant's paint brush and
+   export, autotune, the setup wizards, fault reports, firmware update, AFR/lambda display and other View-menu
+   preferences, a menu command for every drag, the URL manifest source (waits for the S3 bucket), and the
+   `main_mobile.dart` root.
 
 ## Questions for Kurt
 
