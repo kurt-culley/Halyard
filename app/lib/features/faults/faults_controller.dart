@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -15,17 +17,78 @@ typedef FaultRow = ({
 });
 typedef RecordRow = ({String type, String code, String when});
 
-/// Reads the fault log through the session's channel. Clearing waits for the write gate.
+/// Reads the fault log through the session's channel; clears its counters and erases it as the original did.
 class FaultsController extends ChangeNotifier {
-  FaultsController(this._session);
+  FaultsController(this._session, this._policy);
 
   final Session _session;
+  final SwitchablePolicy _policy;
+  String? done;
   final _log = FaultLog();
   bool busy = false;
   bool? hasLog;
   String? error;
 
   bool get isOnline => _session.state.phase == SessionPhase.online;
+  bool get canChange => !_policy.readOnly;
+
+  /// As the original judged it: engine speed (link 1) above zero.
+  bool get engineRunning {
+    final live = _session.live;
+    return live != null && live.has(1) && live.value(1) > 0;
+  }
+
+  /// Zeroes the clearable counters, asking again up to five times while the ECU is busy, then reads the log again.
+  Future<void> clear() async {
+    if (busy) return;
+    busy = true;
+    error = done = null;
+    notifyListeners();
+    final channel = _session.connection.channel;
+    Reply? r;
+    for (var i = 0; i < 5; i++) {
+      r = (await channel.request(faultsClearRequest())).reply;
+      if (r is! FaultActionReply || !r.refused) break;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    busy = false;
+    if (r == null) {
+      error = FaultsStrings.noAnswer;
+    } else if (!r.ok) {
+      error = r is FaultActionReply && r.refused ? FaultsStrings.busy : FaultsStrings.clearRefused(r.status);
+    } else {
+      final history = _log.records.isNotEmpty;
+      await read(history: history);
+      done = FaultsStrings.cleared;
+    }
+    notifyListeners();
+  }
+
+  /// Erases the whole log; the original refused while the engine ran, and so does the ECU.
+  Future<void> erase() async {
+    if (busy) return;
+    if (engineRunning) {
+      error = FaultsStrings.engineRunning;
+      notifyListeners();
+      return;
+    }
+    busy = true;
+    error = done = null;
+    notifyListeners();
+    final r = (await _session.connection.channel.request(faultsEraseLogRequest())).reply;
+    busy = false;
+    if (r == null) {
+      error = FaultsStrings.noAnswer;
+    } else if (!r.ok) {
+      error = r is FaultActionReply && r.refused ? FaultsStrings.engineRunning : FaultsStrings.eraseRefused(r.status);
+    } else {
+      _log.records.clear();
+      await read();
+      done = FaultsStrings.erased;
+    }
+    notifyListeners();
+  }
+
   FaultLogInfo? get info => _log.info;
 
   List<FaultRow> get codes => [

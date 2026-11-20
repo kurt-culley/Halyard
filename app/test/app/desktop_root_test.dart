@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/calibration/calibration_controller.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
+import 'package:halyard/features/faults/faults_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
 import 'package:halyard/features/logging/onboard_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
@@ -377,6 +378,38 @@ void main() {
     await _settle(tester, 5);
     expect(saver.files.keys.single, startsWith('OnBoardLog_'));
     expect(utf8.decode(saver.files.values.single), startsWith('Time,'));
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('fault counters clear, and erasing waits for the engine to stop', (tester) async {
+    await _bigWindow(tester);
+    await tester.pumpWidget(
+      DesktopRoot(ports: _FakePorts(_definition()), storage: _MemoryStorage(), folders: _NoFolders()),
+    );
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', _definition());
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.text('Start demo'));
+    await _settle(tester, 20);
+    await tester.tap(find.text('Faults'));
+    await _settle(tester, 3);
+    final c = tester.element(find.text('Read the fault log')).read<FaultsController>();
+    await c.read();
+    await _settle(tester, 5);
+    expect(c.codes.where((r) => r.count > 0), isNotEmpty);
+    await c.clear();
+    await _settle(tester, 5);
+    expect(c.error, isNull);
+    expect(c.done, 'Fault counters cleared.');
+    expect(c.codes.where((r) => r.count > 0), isEmpty);
+    if (c.engineRunning) {
+      await c.erase();
+      expect(c.error, 'The engine must be stopped to erase the fault log history.');
+    }
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

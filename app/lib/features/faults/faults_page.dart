@@ -11,12 +11,28 @@ class FaultsPage extends StatelessWidget {
   const FaultsPage({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      ChangeNotifierProvider(create: (c) => FaultsController(c.read<Session>()), child: const _FaultsView());
+  Widget build(BuildContext context) => ChangeNotifierProvider(
+    create: (c) => FaultsController(c.read<Session>(), c.read<SwitchablePolicy>()),
+    child: const _FaultsView(),
+  );
 }
 
 class _FaultsView extends StatelessWidget {
   const _FaultsView();
+
+  Future<bool> _confirm(BuildContext context, String text) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(FaultsStrings.caption),
+          content: Text(text),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text(FaultsStrings.no)),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text(FaultsStrings.yes)),
+          ],
+        ),
+      ) ??
+      false;
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +57,34 @@ class _FaultsView extends StatelessWidget {
               onPressed: c.busy || c.hasLog != true ? null : () => c.read(history: true),
               child: const Text(FaultsStrings.history),
             ),
+            Tooltip(
+              message: FaultsStrings.clearTip,
+              child: OutlinedButton(
+                onPressed: c.busy || c.hasLog != true || !c.canChange
+                    ? null
+                    : () async {
+                        if (await _confirm(context, FaultsStrings.clearConfirm)) await c.clear();
+                      },
+                child: const Text(FaultsStrings.clear),
+              ),
+            ),
+            Tooltip(
+              message: c.engineRunning ? FaultsStrings.eraseTipRunning : FaultsStrings.eraseTip,
+              child: OutlinedButton(
+                onPressed: c.busy || c.hasLog != true || !c.canChange || c.engineRunning
+                    ? null
+                    : () async {
+                        if (await _confirm(context, FaultsStrings.eraseConfirm)) await c.erase();
+                      },
+                child: const Text(FaultsStrings.erase),
+              ),
+            ),
             if (info != null) Text(FaultsStrings.usage(info.logUsed, info.logCapacity)),
           ],
         ),
         const SizedBox(height: 4),
-        Text(FaultsStrings.readOnly, style: theme.textTheme.bodySmall),
+        if (!c.canChange) Text(FaultsStrings.readOnly, style: theme.textTheme.bodySmall),
+        if (c.done != null) Text(c.done!),
         if (c.error != null) Text(c.error!, style: TextStyle(color: theme.colorScheme.error)),
         if (c.hasLog == false) const Padding(padding: EdgeInsets.only(top: 16), child: Text(FaultsStrings.noLog)),
         if (c.hasLog == true) ...[
