@@ -21,6 +21,7 @@ class ConnectPage extends StatelessWidget {
       c.read<Connection>(),
       c.read<Session>(),
       c.read<SwitchablePolicy>(),
+      c.read<DemoDefinitionSource?>(),
     ),
     child: const _ConnectView(),
   );
@@ -140,14 +141,27 @@ class _ConnectViewState extends State<_ConnectView> {
         const SizedBox(height: 4),
         Text(ConnectStrings.demoHint, style: theme.textTheme.bodyMedium),
         const SizedBox(height: 8),
-        Row(
+        if (!c.isConnected && context.read<DemoDefinitionSource?>() != null) ...[
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (!await c.startSampleDemo() && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(ConnectStrings.noSample)));
+              }
+            },
+            icon: const Icon(Icons.play_circle_outline),
+            label: const Text(ConnectStrings.sampleDemo),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Wrap(
+          spacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             DropdownButton<String>(
               value: demo,
               items: [for (final s in sources) DropdownMenuItem(value: s, child: Text(s))],
               onChanged: c.isConnected ? null : (s) => setState(() => _demoSource = s),
             ),
-            const SizedBox(width: 16),
             if (!c.isConnected)
               FilledButton(
                 onPressed: demo == null ? null : () => c.startDemo(demo),

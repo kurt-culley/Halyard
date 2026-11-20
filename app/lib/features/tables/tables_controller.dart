@@ -110,6 +110,12 @@ class TablesController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void deselect() {
+    selected = null;
+    selection = null;
+    notifyListeners();
+  }
+
   Set<int> get tuned => _tuned[selected] ?? const {};
 
   // ---------------------------------------------------------------- selection

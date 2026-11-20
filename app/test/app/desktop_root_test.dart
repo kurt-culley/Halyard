@@ -79,6 +79,13 @@ final class _KeptFiles implements FileSaver {
   }
 }
 
+final class _Sample implements DemoDefinitionSource {
+  _Sample(this.text);
+  final String text;
+  @override
+  Future<String?> fetch() async => text;
+}
+
 final class _NoFolders implements FolderPicker {
   @override
   bool get available => false;
@@ -574,6 +581,26 @@ void main() {
     final back = CustomCanConfig.decode(priv);
     expect(back.rx[0].canId, 0x123);
     expect(back.rx[0].signals[0].dstLinkId, link);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('the sample definition starts the demo in one tap', (tester) async {
+    await _bigWindow(tester);
+    await tester.pumpWidget(
+      DesktopRoot(
+        ports: _FakePorts(_definition()),
+        storage: _MemoryStorage(),
+        folders: _NoFolders(),
+        sample: _Sample(_definition()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Try the demo with the sample definition'));
+    await _settle(tester, 20);
+    expect(find.textContaining('Online'), findsOneWidget);
+    expect(find.text('demo.medef'), findsWidgets);
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

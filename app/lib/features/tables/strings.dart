@@ -1,6 +1,7 @@
 abstract final class TablesStrings {
   static const notOnline = 'Connect to an ECU to see its tables.';
   static const choose = 'Choose a table.';
+  static const allTables = 'All tables';
   static const search = 'Find a table';
   static const other = 'Other';
   static const disabled = 'Disabled';

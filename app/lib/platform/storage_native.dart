@@ -73,3 +73,11 @@ Future<List<(String, String)>> readFolder(Directory dir, String extension) async
   ]..sort((a, b) => a.path.compareTo(b.path));
   return [for (final f in files) (f.uri.pathSegments.last, await f.readAsString())];
 }
+
+DemoDefinitionSource demoDefinition() => const _NoDemo();
+
+final class _NoDemo implements DemoDefinitionSource {
+  const _NoDemo();
+  @override
+  Future<String?> fetch() async => null;
+}

@@ -22,7 +22,9 @@ let id = 0; const pending = new Map(); const handlers = [];
 ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } else handlers.forEach((h) => h(m)); });
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 await send('Page.enable'); await send('Runtime.enable'); await send('DOM.enable');
-await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+// A phone with SIZE=390x844, else a laptop.
+const [w, h] = (process.env.SIZE ?? '1280x800').split('x').map(Number);
+await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 600 });
 handlers.push((m) => { if (m.method === 'Runtime.exceptionThrown') console.error('page error:', m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text); });
 let chooser = null;
 await send('Page.setInterceptFileChooserDialog', { enabled: true });

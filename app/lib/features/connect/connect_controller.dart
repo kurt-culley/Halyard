@@ -12,13 +12,15 @@ class ConnectController extends ChangeNotifier {
     this._link,
     this._connection,
     this._session,
-    this._policy,
-  ) {
+    this._policy, [
+    this._sample,
+  ]) {
     _sub = _session.states.listen((_) => notifyListeners());
     unawaited(refreshPorts());
   }
 
   final SwitchablePolicy _policy;
+  final DemoDefinitionSource? _sample;
   final SavedDefinitions _saved;
   final FolderPicker _folders;
   DefinitionLibrary get _definitions => _saved.library;
@@ -88,6 +90,16 @@ class ConnectController extends ChangeNotifier {
   }
 
   /// Adds every definition in a folder the user picks; returns the files that weren't definitions.
+  /// Adds Halyard's own sample definition where the host serves one, and starts the demo on it; false without one.
+  Future<bool> startSampleDemo() async {
+    final text = await _sample?.fetch();
+    if (text == null || !await addDefinition(sampleName, text)) return false;
+    startDemo(sampleName);
+    return true;
+  }
+
+  static const sampleName = 'demo.medef';
+
   Future<List<String>> addFolder() async {
     final files = await _folders.pick('.medef');
     if (files == null) return const [];

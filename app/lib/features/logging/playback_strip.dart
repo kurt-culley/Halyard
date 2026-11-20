@@ -82,30 +82,35 @@ class _StripState extends State<_Strip> {
     final scheme = theme.colorScheme;
     Widget button(String tip, IconData icon, VoidCallback? on) =>
         IconButton(tooltip: tip, visualDensity: VisualDensity.compact, onPressed: on, icon: Icon(icon));
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Material(
       color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
-            button(PlaybackStrings.load, Icons.folder_open, () => _load(c)),
-            button(PlaybackStrings.save, Icons.save_alt, c.save),
-            const SizedBox(height: 24, child: VerticalDivider()),
-            button(
-              PlaybackStrings.backMore,
-              Icons.keyboard_double_arrow_left,
-              () => c.step(PlaybackController.largeChange),
-            ),
+            if (!narrow) ...[
+              button(PlaybackStrings.load, Icons.folder_open, () => _load(c)),
+              button(PlaybackStrings.save, Icons.save_alt, c.save),
+              const SizedBox(height: 24, child: VerticalDivider()),
+            ],
+            if (!narrow)
+              button(
+                PlaybackStrings.backMore,
+                Icons.keyboard_double_arrow_left,
+                () => c.step(PlaybackController.largeChange),
+              ),
             button(PlaybackStrings.back, Icons.chevron_left, () => c.step(PlaybackController.smallChange)),
             c.playing
                 ? button(PlaybackStrings.pause, Icons.pause, c.pause)
                 : button(PlaybackStrings.play, Icons.play_arrow, c.live ? c.pause : c.play),
             button(PlaybackStrings.forward, Icons.chevron_right, () => c.step(-PlaybackController.smallChange)),
-            button(
-              PlaybackStrings.forwardMore,
-              Icons.keyboard_double_arrow_right,
-              () => c.step(-PlaybackController.largeChange),
-            ),
+            if (!narrow)
+              button(
+                PlaybackStrings.forwardMore,
+                Icons.keyboard_double_arrow_right,
+                () => c.step(-PlaybackController.largeChange),
+              ),
             Expanded(
               child: Slider(
                 value: (PlaybackController.maximum - c.seekIndex).toDouble(),
@@ -113,13 +118,14 @@ class _StripState extends State<_Strip> {
                 onChanged: (v) => c.seek(PlaybackController.maximum - v.round()),
               ),
             ),
-            SizedBox(
-              width: 92,
-              child: Text(
-                PlaybackStrings.label(c.seekIndex),
-                style: theme.textTheme.bodySmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+            if (!narrow)
+              SizedBox(
+                width: 92,
+                child: Text(
+                  PlaybackStrings.label(c.seekIndex),
+                  style: theme.textTheme.bodySmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                ),
               ),
-            ),
             if (c.live)
               const Chip(
                 avatar: Icon(Icons.circle, size: 12, color: Colors.green),
@@ -132,7 +138,7 @@ class _StripState extends State<_Strip> {
                 onPressed: c.goLive,
                 tooltip: PlaybackStrings.goLive,
               ),
-            if (c.message != null) ...[
+            if (c.message != null && !narrow) ...[
               const SizedBox(width: 8),
               Flexible(child: Text(c.message!, overflow: TextOverflow.ellipsis)),
             ],

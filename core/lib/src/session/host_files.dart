@@ -28,3 +28,10 @@ abstract interface class FileSaver {
   /// False when the user cancelled.
   Future<bool> save(String suggestedName, Uint8List bytes);
 }
+
+/// Where the host can fetch Halyard's own synthetic definition for demo mode (the web build serves one beside the
+/// app); none elsewhere.
+abstract interface class DemoDefinitionSource {
+  /// The definition's text, or null when there is none to fetch.
+  Future<String?> fetch();
+}

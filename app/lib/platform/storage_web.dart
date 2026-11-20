@@ -10,6 +10,24 @@ FolderPicker folders() => const _NoFolders();
 
 FileSaver saver() => const _Download();
 
+DemoDefinitionSource demoDefinition() => const _ServedDemo();
+
+/// demo.medef beside the app: the publish workflow writes it from tool/demo_definition.mjs.
+final class _ServedDemo implements DemoDefinitionSource {
+  const _ServedDemo();
+
+  @override
+  Future<String?> fetch() async {
+    try {
+      final r = await web.window.fetch('demo.medef'.toJS).toDart;
+      if (!r.ok) return null;
+      return (await r.text().toDart).toDart;
+    } on Object {
+      return null;
+    }
+  }
+}
+
 /// A browser download of the bytes.
 final class _Download implements FileSaver {
   const _Download();

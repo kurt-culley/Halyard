@@ -85,42 +85,76 @@ class DesktopShellPage extends StatelessWidget {
         },
         child: Focus(
           autofocus: true,
-          child: Scaffold(
-            body: Row(
-              children: [
-                // The rail scrolls when the window is shorter than its destinations.
-                LayoutBuilder(
-                  builder: (context, box) => SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: box.maxHeight),
-                      child: IntrinsicHeight(
-                        child: NavigationRail(
-                          selectedIndex: tabs.activeIndex,
-                          onDestinationSelected: tabs.setActiveIndex,
-                          labelType: NavigationRailLabelType.all,
-                          trailing: IconButton(
-                            tooltip: '${WorkspaceStrings.palette} (Ctrl+K)',
+          child: LayoutBuilder(
+            builder: (context, outer) {
+              // On a phone-width screen the destinations move into a drawer, so the page gets the width.
+              final narrow = outer.maxWidth < 720;
+              return Scaffold(
+                appBar: narrow
+                    ? AppBar(
+                        title: Text(_destinations[tabs.activeIndex].$1),
+                        actions: [
+                          IconButton(
+                            tooltip: WorkspaceStrings.palette,
                             icon: const Icon(Icons.search),
                             onPressed: () => openPalette(context, tabs),
                           ),
-                          destinations: [
-                            for (final (label, icon, _) in _destinations)
-                              NavigationRailDestination(icon: Icon(icon), label: Text(label)),
-                          ],
-                        ),
+                        ],
+                      )
+                    : null,
+                drawer: narrow
+                    ? NavigationDrawer(
+                        selectedIndex: tabs.activeIndex,
+                        onDestinationSelected: (i) {
+                          tabs.setActiveIndex(i);
+                          Navigator.pop(context);
+                        },
+                        children: [
+                          const SizedBox(height: 12),
+                          for (final (label, icon, _) in _destinations)
+                            NavigationDrawerDestination(icon: Icon(icon), label: Text(label)),
+                        ],
+                      )
+                    : null,
+                body: narrow
+                    ? child
+                    : Row(
+                        children: [
+                          // The rail scrolls when the window is shorter than its destinations.
+                          LayoutBuilder(
+                            builder: (context, box) => SingleChildScrollView(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minHeight: box.maxHeight),
+                                child: IntrinsicHeight(
+                                  child: NavigationRail(
+                                    selectedIndex: tabs.activeIndex,
+                                    onDestinationSelected: tabs.setActiveIndex,
+                                    labelType: NavigationRailLabelType.all,
+                                    trailing: IconButton(
+                                      tooltip: '${WorkspaceStrings.palette} (Ctrl+K)',
+                                      icon: const Icon(Icons.search),
+                                      onPressed: () => openPalette(context, tabs),
+                                    ),
+                                    destinations: [
+                                      for (final (label, icon, _) in _destinations)
+                                        NavigationRailDestination(icon: Icon(icon), label: Text(label)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(child: child),
+                        ],
                       ),
-                    ),
-                  ),
+                bottomNavigationBar: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [PlaybackStrip(), _StatusBar()],
                 ),
-                const VerticalDivider(width: 1),
-                Expanded(child: child),
-              ],
-            ),
-            bottomNavigationBar: const Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [PlaybackStrip(), _StatusBar()],
-            ),
+              );
+            },
           ),
         ),
       );

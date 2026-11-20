@@ -18,6 +18,8 @@ abstract final class ConnectStrings {
   static const demo = 'Demo';
   static const demoHint = 'Runs a simulated ECU built from one of your definitions, with live data.';
   static const startDemo = 'Start demo';
+  static const sampleDemo = 'Try the demo with the sample definition';
+  static const noSample = 'The sample definition could not be fetched.';
   static const disconnect = 'Disconnect';
   static const fileTypeLabel = 'Definitions';
   static const addFolder = 'Add a folder…';

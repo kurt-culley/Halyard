@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
@@ -14,12 +15,15 @@ import 'preferences.dart';
 /// definitions, the link the connect feature chooses and the write gate. The link is read only until the user says
 /// otherwise on the connect page.
 class DesktopRoot extends StatefulWidget {
-  const DesktopRoot({super.key, this.ports, this.storage, this.folders, this.saver});
+  const DesktopRoot({super.key, this.ports, this.storage, this.folders, this.saver, this.sample});
 
   /// The platform's when null; tests pass their own.
   final PortFinder? ports;
   final AppStorage? storage;
   final FolderPicker? folders;
+
+  /// Halyard's own sample definition; the platform's when not given (served beside the web app, none natively).
+  final DemoDefinitionSource? sample;
   final FileSaver? saver;
 
   @override
@@ -106,6 +110,7 @@ class _DesktopRootState extends State<DesktopRoot> {
         Provider.value(value: _tiles),
         Provider.value(value: _ports),
         Provider.value(value: _folders),
+        Provider<DemoDefinitionSource?>.value(value: widget.sample ?? (kIsWeb ? platformDemoDefinition() : null)),
         Provider.value(value: _saver),
         ChangeNotifierProvider.value(value: _link),
         Provider.value(value: _connection),

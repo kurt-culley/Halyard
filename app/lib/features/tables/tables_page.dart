@@ -22,6 +22,24 @@ class TablesPage extends StatelessWidget {
     child: Consumer<TablesController>(
       builder: (context, c, _) {
         if (!c.isOnline) return const Center(child: Text(TablesStrings.notOnline));
+        // On a phone the list and the editor take turns.
+        if (MediaQuery.sizeOf(context).width < 720) {
+          if (c.view == null) return _TableList(c);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: c.deselect,
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text(TablesStrings.allTables),
+                ),
+              ),
+              Expanded(child: _Editor(c)),
+            ],
+          );
+        }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -271,19 +289,18 @@ class _EditorState extends State<_Editor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
-                child: Text(view.name, style: theme.textTheme.titleLarge, overflow: TextOverflow.ellipsis),
-              ),
+              Text(view.name, style: theme.textTheme.titleLarge),
               if (!view.enabled) Chip(label: const Text(TablesStrings.disabled), visualDensity: VisualDensity.compact),
-              const SizedBox(width: 8),
               Chip(
                 avatar: Icon(view.unstored ? Icons.warning_amber : Icons.check, size: 18),
                 label: Text(view.unstored ? TablesStrings.unstored : TablesStrings.matchesFlash),
                 visualDensity: VisualDensity.compact,
               ),
-              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: edit && view.unstored ? c.store : null,
                 icon: const Icon(Icons.save),
@@ -442,8 +459,11 @@ class _EditorState extends State<_Editor> {
               ),
             ),
           ],
-          const SizedBox(height: 4),
-          Text(TablesStrings.hint, style: theme.textTheme.bodySmall),
+          // Keyboard help only where there is likely a keyboard.
+          if (MediaQuery.sizeOf(context).width >= 720) ...[
+            const SizedBox(height: 4),
+            Text(TablesStrings.hint, style: theme.textTheme.bodySmall),
+          ],
         ],
       ),
     );
