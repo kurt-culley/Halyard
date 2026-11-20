@@ -3,6 +3,7 @@ import 'package:auto_route/auto_route.dart';
 import '../features/assist/assist_page.dart';
 import '../features/bench/bench_page.dart';
 import '../features/calibration/calibration_page.dart';
+import '../features/can/can_page.dart';
 import '../features/connect/connect_page.dart';
 import '../features/ecu_tools/ecu_tools_page.dart';
 import '../features/faults/faults_page.dart';
@@ -34,6 +35,7 @@ class DesktopRouter extends RootStackRouter {
         AutoRoute(page: WorkspaceRoute.page, path: 'pages'),
         AutoRoute(page: LoggingRoute.page, path: 'logging'),
         AutoRoute(page: TriggerScopeRoute.page, path: 'trigger-scope'),
+        AutoRoute(page: CanRoute.page, path: 'can'),
         AutoRoute(page: FaultsRoute.page, path: 'faults'),
         AutoRoute(page: EcuToolsRoute.page, path: 'ecu-tools'),
         AutoRoute(page: SettingsRoute.page, path: 'preferences'),

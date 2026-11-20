@@ -59,6 +59,22 @@ class CalibrationRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [CanPage]
+class CanRoute extends PageRouteInfo<void> {
+  const CanRoute({List<PageRouteInfo>? children})
+    : super(CanRoute.name, initialChildren: children);
+
+  static const String name = 'CanRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const CanPage();
+    },
+  );
+}
+
+/// generated route for
 /// [ConnectPage]
 class ConnectRoute extends PageRouteInfo<void> {
   const ConnectRoute({List<PageRouteInfo>? children})

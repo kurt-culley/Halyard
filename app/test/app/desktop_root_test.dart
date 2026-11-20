@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/calibration/calibration_controller.dart';
+import 'package:halyard/features/can/can_controller.dart';
+import 'package:halyard/features/can/strings.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/ecu_tools/ecu_tools_controller.dart';
 import 'package:halyard/features/faults/faults_controller.dart';
@@ -25,6 +27,20 @@ import 'package:provider/provider.dart';
 String _definition() {
   final cases = jsonDecode(File('../core/test/vectors/live.json').readAsStringSync()) as List<dynamic>;
   return (cases.first as Map<String, dynamic>)['xml'] as String;
+}
+
+/// The test definition with the custom CAN driver added: its configuration in 3780 bytes of private data.
+String _withCan(String xml) {
+  final priv = base64Encode([2, 12, 12, 0, ...List.filled(3776, 0)]);
+  const param =
+      '<DriverModelParam><name>ConfigCRC</name><SectionName>Custom CAN</SectionName><type>InputBox</type>'
+      '<value>0</value></DriverModelParam>';
+  final driver =
+      '<DriverModel><id>8253</id><name>Custom CAN</name><numberOfConfigs>1</numberOfConfigs>'
+      '<configParams>$param</configParams><privSize>3780</privSize><privData>$priv</privData>'
+      '<numberOfOutputs>0</numberOfOutputs><outputLinkIds></outputLinkIds><numberOfInputs>0</numberOfInputs>'
+      '<inputLinkIds></inputLinkIds></DriverModel>';
+  return xml.contains('</drivers>') ? xml.replaceFirst('</drivers>', '$driver</drivers>') : xml;
 }
 
 /// One port with a simulated ECU behind it.
@@ -220,6 +236,8 @@ void main() {
     expect(find.byType(DataTable), findsOneWidget);
 
     // A tile on a user page, chosen from the command palette.
+    await tester.ensureVisible(find.byIcon(Icons.search));
+    await tester.pump();
     await tester.tap(find.byIcon(Icons.search));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'show new tile');
@@ -511,6 +529,51 @@ void main() {
     await _settle(tester, 5);
     expect(await loading, isTrue);
     expect(ports.ecu.calibration.tables[fits.id]!.z[0], before);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('a custom CAN message is edited, checked, saved and stored with its checksum', (tester) async {
+    final xml = _withCan(_definition());
+    expect(xml, contains('<id>8253</id>'));
+    final ports = _FakePorts(xml);
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: ports, storage: _MemoryStorage(), folders: _NoFolders()));
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('can.medef', xml);
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await _settle(tester, 20);
+    await tester.tap(find.text('CAN'));
+    await _settle(tester, 3);
+    final c = tester.element(find.text('Custom CAN').first).read<CanController>();
+    expect(c.supported, isTrue);
+    final link = c.links.first.id;
+    c.edit(() {
+      final m = c.config!.rx[0]
+        ..enabled = true
+        ..canId = 0x123;
+      m.signals[0]
+        ..enabled = true
+        ..startBit = 0
+        ..bitLength = 16
+        ..mult = 1;
+    });
+    expect(c.allValid, isFalse);
+    expect(c.check.errors.map(CanStrings.issue), contains('Signal 1 has no target channel.'));
+    c.edit(() => c.config!.rx[0].signals[0].dstLinkId = link);
+    expect(c.allValid, isTrue);
+    final saving = c.save();
+    await _settle(tester, 10);
+    await saving;
+    expect(c.note, 'Saved and stored.');
+    final priv = ports.ecu.calibration.drivers[CanController.driverId]!.priv;
+    final back = CustomCanConfig.decode(priv);
+    expect(back.rx[0].canId, 0x123);
+    expect(back.rx[0].signals[0].dstLinkId, link);
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

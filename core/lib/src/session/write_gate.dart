@@ -139,6 +139,22 @@ class WriteGate {
     }
   }
 
+  /// Replaces a driver's private data (the custom CAN configuration, for one), fitted to its size, and mirrors its
+  /// checksum into the driver's ConfigCRC setting, as the original did whenever the data was set.
+  void setDriverPrivate(int driverId, Uint8List data) {
+    final d = _cal.definition.drivers[driverId], v = _cal.drivers[driverId];
+    if (d == null || v == null || v.priv.isEmpty) return;
+    final priv = Uint8List(v.priv.length)
+      ..setAll(0, data.length > v.priv.length ? data.sublist(0, v.priv.length) : data);
+    v.priv = priv;
+    for (var i = 0; i < d.params.length && i < v.config.length; i++) {
+      if (d.params[i].name == 'ConfigCRC') {
+        v.config[i] = fletcher16(priv).toDouble();
+        break;
+      }
+    }
+  }
+
   /// The frames a driver save sends: the whole driver, then a store when asked.
   List<Frame> driverSaveFrames(int driverId, {bool store = false}) {
     final d = _cal.definition.drivers[driverId]!;

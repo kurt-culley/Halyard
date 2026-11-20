@@ -36,8 +36,9 @@ const param = (name, section, value, { options, units, tip, constraint } = {}) =
     (constraint ? el('ViewConstraint', el('ParamIndex', String(constraint[0])) + el('AcceptedValues', el('float', String(constraint[1])))) : '') +
     (options ? el('options', options.map((o, i) => el('comboBoxOption', el('id', String(i)) + el('name', o))).join('')) : '') +
     (units ? el('MeasurementUnitTypes', units.map((u) => `<${u} />`).join('')) : ''));
-const driver = (id, name, params, inputs = [], inputNames = []) =>
+const driver = (id, name, params, inputs = [], inputNames = [], priv = null) =>
   el('DriverModel', el('id', String(id)) + el('name', name) + el('numberOfConfigs', String(params.length)) + el('configParams', params.join('')) +
+    (priv ? el('privSize', String(priv.length)) + el('privData', priv.toString('base64')) : '') +
     el('numberOfOutputs', '0') + el('outputLinkIds', '') + el('numberOfInputs', String(inputs.length)) + el('editableInputs', 'true') +
     el('inputNames', inputNames.map((n) => el('string', n)).join('')) + el('inputLinkIds', inputs.map((i) => el('unsignedShort', String(i))).join('')));
 const drivers =
@@ -56,7 +57,10 @@ const drivers =
     param('Teeth', 'Crank', 36),
     param('Cam A Pattern', 'Cam', 2, { options: ['None', 'Nissan SR', 'Single'] }),
     param('Cam Sync After RPM', 'Cam', 0),
-  ]);
+  ]) +
+  // Custom CAN: the configuration lives in the driver's private data, an empty layout-2 blob to start with.
+  driver(8253, 'Custom CAN', [param('ConfigCRC', 'Custom CAN', 0)], [], [],
+    Buffer.from([2, 12, 12, 0, ...new Array(3776).fill(0)]));
 const xml = '<ecu>' +
   el('DeviceDataInformationModel', el('ProductName', 'DEMO') + el('ModelName', 'BENCH') + el('Version', '1')) +
   `<links>${links.map(([id, name, unit, lo, hi]) => el('DataLinkModel', el('id', String(id)) + el('name', name) + el('measureUnit', unit) +

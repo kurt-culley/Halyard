@@ -29,6 +29,7 @@ class DesktopShellPage extends StatelessWidget {
     (WorkspaceStrings.pages, Icons.dashboard_customize, WorkspaceRoute()),
     ('Logging', Icons.timeline, LoggingRoute()),
     ('Trigger', Icons.ssid_chart, TriggerScopeRoute()),
+    ('CAN', Icons.cable, CanRoute()),
     ('Faults', Icons.report_problem_outlined, FaultsRoute()),
     ('ECU tools', Icons.build_outlined, EcuToolsRoute()),
     ('Preferences', Icons.settings_outlined, SettingsRoute()),
