@@ -60,7 +60,12 @@ const drivers =
 const xml = '<ecu>' +
   el('DeviceDataInformationModel', el('ProductName', 'DEMO') + el('ModelName', 'BENCH') + el('Version', '1')) +
   `<links>${links.map(([id, name, unit, lo, hi]) => el('DataLinkModel', el('id', String(id)) + el('name', name) + el('measureUnit', unit) +
-    el('ViewInTree', 'true') + el('MinValue', String(lo)) + el('MaxValue', String(hi)))).join('')}</links>` +
+    el('category', id <= 6 ? 'Engine' : 'Sensors') + el('ViewInTree', 'true') + el('StandardLogging', id <= 6 ? 'true' : 'false') +
+    el('MinValue', String(lo)) + el('MaxValue', String(hi)))).join('')}` +
+  // The onboard logger's state and entry count, which the simulator reports.
+  [[1015, 'Data log status'], [1018, 'Data log entries']].map(([id, name]) => el('DataLinkModel', el('id', String(id)) +
+    el('name', name) + el('category', 'Logging') + el('ViewInTree', 'false') + el('MinValue', '0') + el('MaxValue', '100000'))).join('') +
+  `</links>` +
   '<tables>' +
   table(4096, 'Fuel VE', 'Fuel', 16, 16, 1, 2, 9, rpm, map, ve, 0.1) +
   table(4097, 'Ignition advance', 'Ignition', 16, 16, 1, 2, 8, rpm, map, ign, 0.5) +

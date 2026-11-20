@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../instruments/log_plot.dart';
 import 'logging_controller.dart';
+import 'onboard_view.dart';
 import 'strings.dart';
 
 @RoutePage()
@@ -13,9 +14,29 @@ class LoggingPage extends StatelessWidget {
   const LoggingPage({super.key});
 
   @override
-  Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (c) => LoggingController(c.read<Session>(), c.read<FileSaver>()),
-    child: const _LoggingView(),
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 2,
+    child: Column(
+      children: [
+        const TabBar(
+          tabs: [
+            Tab(text: OnboardStrings.thisComputer),
+            Tab(text: OnboardStrings.onEcu),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            children: [
+              ChangeNotifierProvider(
+                create: (c) => LoggingController(c.read<Session>(), c.read<FileSaver>()),
+                child: const _LoggingView(),
+              ),
+              OnboardView.provided(),
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }
 

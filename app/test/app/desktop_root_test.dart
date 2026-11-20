@@ -7,6 +7,7 @@ import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/calibration/calibration_controller.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
+import 'package:halyard/features/logging/onboard_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
 import 'package:halyard/features/playback/playback_controller.dart';
 import 'package:halyard/features/tables/tables_controller.dart';
@@ -334,6 +335,48 @@ void main() {
     await tester.pump();
     expect(find.text('Live'), findsWidgets);
     expect(c.live, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('onboard logging lists the ECU\'s logs, records one and downloads it', (tester) async {
+    final saver = _KeptFiles();
+    await _bigWindow(tester);
+    await tester.pumpWidget(
+      DesktopRoot(ports: _FakePorts(_definition()), storage: _MemoryStorage(), folders: _NoFolders(), saver: saver),
+    );
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', _definition());
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.text('Start demo'));
+    await _settle(tester, 20);
+
+    await tester.tap(find.text('Logging'));
+    await _settle(tester, 3);
+    await tester.tap(find.text('On the ECU'));
+    await _settle(tester, 5);
+    final c = tester.element(find.text('Logs')).read<OnboardController>();
+    expect(c.supported, isTrue);
+    expect(c.logs, hasLength(2));
+    expect(c.status, 1);
+
+    await c.toggleLogging();
+    await _settle(tester, 20);
+    expect(c.isLogging, isTrue);
+    await c.toggleLogging();
+    await _settle(tester, 5);
+    await c.refresh();
+    await tester.pump();
+    expect(c.logs, hasLength(3));
+
+    c.select(c.logs.last.id, true);
+    await c.download();
+    await _settle(tester, 5);
+    expect(saver.files.keys.single, startsWith('OnBoardLog_'));
+    expect(utf8.decode(saver.files.values.single), startsWith('Time,'));
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

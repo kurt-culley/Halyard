@@ -67,7 +67,10 @@ class LiveController extends ChangeNotifier {
     final cal = _session.calibration;
     final live = _session.live;
     if (cal == null || live == null) return const [];
-    final links = [for (final id in live.ids) ?cal.definition.links[id]];
+    final links = [
+      for (final id in live.ids)
+        if (cal.definition.links[id] case final l? when l.viewInTree) l,
+    ];
     final pins = _pins;
     if (pins == null) return [for (final l in links.where((l) => l.maxValue > l.minValue).take(4)) l.id];
     return [
@@ -102,7 +105,8 @@ class LiveController extends ChangeNotifier {
     final f = filter.toLowerCase();
     return [
       for (final id in live.ids)
-        if (cal.definition.links[id] case final link? when f.isEmpty || _name(link).toLowerCase().contains(f))
+        if (cal.definition.links[id] case final link?
+            when link.viewInTree && (f.isEmpty || _name(link).toLowerCase().contains(f)))
           _row(live, link, pinned.contains(id)),
     ];
   }
