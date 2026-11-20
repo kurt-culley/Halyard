@@ -1619,5 +1619,89 @@ write('playback.json', playbackCases);
   write('table_editing.json', [{ formats, incs, tables, formulas, clipboard }]);
 }
 
+// ---------------------------------------------------------------- custom CAN to and from DBC (last, so earlier
+// sections keep their random streams)
+{
+  const { parseDbc } = await src('dbc.ts');
+  const CC = await src('custom-can.ts');
+  const B = await src('custom-can-dbc.ts');
+  const names = ['RPM', 'Engine speed', 'MAP (kPa)', 'Ünïcode', '1st gear', 'a-b', ' ', 'Oil_T', '😀x', 'Throttle %'];
+  function dbcText() {
+    const L = ['VERSION ""', '', 'NS_ :', '', 'BS_:', '', 'BU_: ECU DASH'];
+    const ids = [];
+    for (let i = 0; i < 1 + int(6); i++) {
+      const id = rnd() < 0.2 ? (0x80000000 + int(0x1fffffff)) : (rnd() < 0.3 && ids.length ? pick(ids) : int(0x800));
+      ids.push(id);
+      L.push(`BO_ ${id} M${i}: 8 ECU`);
+      const muxed = rnd() < 0.3;
+      if (muxed) L.push(` SG_ Mx${i} M : ${pick([0, 8, 60, 70])}|${pick([4, 8, 0, 40])}@${pick(['0', '1'])}+ (1,0) [0|0] "" ECU`);
+      for (let k = 0; k < int(11); k++) {
+        const mux = muxed ? pick(['', 'm0', 'm1', 'm3']) : (rnd() < 0.05 ? 'm2' : '');
+        L.push(` SG_ S${i}_${k} ${mux} : ${int(70)}|${pick([1, 8, 16, 32, 64, 70])}@${pick(['0', '1'])}${pick(['+', '-'])} (${pick(['1', '0.1', '-0.5', '100'])},${pick(['0', '-40', '2.5'])}) [0|0] "" ECU`);
+      }
+      if (rnd() < 0.3) L.push(`SIG_VALTYPE_ ${id} S${i}_0 : ${pick([1, 2])};`);
+      L.push('');
+    }
+    L.push('BA_DEF_ BO_ "GenMsgCycleTime" INT 0 60000;');
+    for (const id of ids) if (rnd() < 0.6) L.push(`BA_ "GenMsgCycleTime" BO_ ${id} ${pick([10, 20, 100, 3, 0, 2000, 7])};`);
+    return { text: L.join('\r\n') + '\r\n', ids };
+  }
+  function seeded(ids) {
+    const c = new CC.CustomCanConfig();
+    for (const [list, n] of [[c.rxMessages, 12], [c.txMessages, 12]]) {
+      for (let i = 0; i < n; i++) {
+        if (rnd() < 0.35) {
+          const m = list[i];
+          m.enabled = true; m.canId = rnd() < 0.5 && ids.length ? (pick(ids) & 0x1fffffff) : int(0x800);
+        }
+      }
+    }
+    return c;
+  }
+  const imports = [];
+  for (let n = 0; n < 160; n++) {
+    const { text, ids } = dbcText();
+    let messages; try { messages = parseDbc(text).messages; } catch { continue; }
+    const pickSel = () => messages.filter(() => rnd() < 0.8).map((m) => [m, m.signals.filter(() => rnd() < 0.85)]);
+    const sel = pickSel();
+    const selection = sel.map(([m, sigs]) => [messages.indexOf(m), sigs.map((s) => m.signals.indexOf(s))]);
+    const reserved = rnd() < 0.2 && ids.length ? [pick(ids) & 0x1fffffff] : [];
+    const tx = rnd() < 0.5;
+    const c = seeded(ids);
+    const before = hex([...c.encode()]);
+    const answers = [];
+    const host = (list) => ({
+      reservedIds: new Set(reserved),
+      listedWithId: (id) => host.items.filter((m) => m.canId >>> 0 === id),
+      freeSlot: () => list.find((m) => !m.enabled) ?? null,
+      resetSlot: (m) => { const i = list.indexOf(m); list[i] = tx ? CC.newTxMessage() : CC.newRxMessage(); },
+      refresh: () => { host.items = list.filter((m) => m.enabled); },
+      ask: async () => { const a = rnd() < 0.6; answers.push(a); return a; },
+    });
+    const list = tx ? c.txMessages : c.rxMessages;
+    const h = host(list); host.items = list.filter((m) => m.enabled);
+    const r = await (tx ? B.importTx(h, sel) : B.importRx(h, sel));
+    imports.push({ text, tx, selection, reserved, before, answers, after: hex([...c.encode()]), added: r.added, skipped: r.skipped, notes: r.notes, summary: B.importSummary(r) });
+  }
+  const exports = [];
+  for (let n = 0; n < 80; n++) {
+    const c = new CC.CustomCanConfig();
+    for (const m of c.rxMessages) {
+      if (rnd() < 0.5) continue;
+      Object.assign(m, { enabled: true, canId: rnd() < 0.2 ? int(0x1fffffff) : int(0x800), extended: rnd() < 0.2, bigEndian: rnd() < 0.5, muxEnabled: rnd() < 0.3, muxStartBit: int(64), muxBitLength: 1 + int(8), muxMatch: int(4) });
+      for (const s of m.signals) if (rnd() < 0.5) Object.assign(s, { enabled: true, format: int(4), startBit: int(64), bitLength: 1 + int(32), mult: Math.fround(pick([1, 0.1, -2.5, 1e-7, 123456.789])), offset: Math.fround(pick([0, -40, 0.3])), dstLinkId: int(12) });
+    }
+    for (const m of c.txMessages) {
+      if (rnd() < 0.5) continue;
+      Object.assign(m, { enabled: true, canId: rnd() < 0.2 ? int(0x1fffffff) : int(0x800), extended: rnd() < 0.2, freqHz: pick([1, 3, 10, 50, 333, 1000, 0]) });
+      for (const s of m.signals) if (rnd() < 0.5) Object.assign(s, { enabled: true, bigEndian: rnd() < 0.5, signed: rnd() < 0.5, startBit: int(64), bitLength: 1 + int(32), mult: Math.fround(pick([1, 0.01, 2])), offset: Math.fround(pick([0, 10])), srcLinkId: int(12) });
+    }
+    const linkNames = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, rnd() < 0.8 ? pick(names) : null]));
+    const name = (id) => linkNames[id] ?? null;
+    exports.push({ config: hex([...c.encode()]), linkNames, rx: B.exportRx(c.rxMessages, name), tx: B.exportTx(c.txMessages, name) });
+  }
+  write('custom_can_dbc.json', [{ imports, exports }]);
+}
+
 copyFileSync(resolve(me360, 'test/u01-fuzz.json'), resolve(out, 'framing_fuzz.json'));
 console.log(`requests ${requests.length}, replies ${replies.length}, reporting ${reportingSeq.length}, recognition ${recognition.length}, device files ${deviceFiles.length} (${deviceFiles.filter((d) => d.error).length} rejected), calibration files ${calibrationFiles.length}, simulator sessions ${simSessions.length}, session cases ${sessionCases.length}, live cases ${liveCases.length} → ${out}`);

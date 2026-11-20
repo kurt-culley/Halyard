@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
@@ -12,7 +13,8 @@ class CanPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (c) => CanController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>()),
+    create: (c) =>
+        CanController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>(), c.read<FileSaver>()),
     child: const _CanView(),
   );
 }
@@ -28,6 +30,152 @@ List<Color> _signalColours(ColorScheme s) => [
   Colors.indigo,
   Colors.pink,
 ];
+
+Future<void> _message(BuildContext context, String text, {String? title}) => showDialog<void>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: title == null ? null : Text(title),
+    content: SingleChildScrollView(child: Text(text)),
+    actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text(CanStrings.ok))],
+  ),
+);
+
+Future<void> _import(BuildContext context, CanController c) async {
+  final f = await openFile(
+    acceptedTypeGroups: const [
+      XTypeGroup(label: CanStrings.dbcType, extensions: ['dbc']),
+    ],
+  );
+  if (f == null || !context.mounted) return;
+  final List<DbcMessage> messages;
+  try {
+    messages = parseDbc(await f.readAsString());
+  } on Object catch (e) {
+    if (context.mounted) await _message(context, CanStrings.unreadableDbc('$e'));
+    return;
+  }
+  if (!context.mounted) return;
+  final selection = await showDialog<List<(DbcMessage, List<DbcSignal>)>>(
+    context: context,
+    builder: (_) => _DbcPicker(messages, transmit: c.transmit),
+  );
+  if (selection == null || selection.isEmpty || !context.mounted) return;
+  final summary = await c.importDbc(selection, (text, title) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(text),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text(CanStrings.no)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text(CanStrings.yes)),
+        ],
+      ),
+    );
+    return yes ?? false;
+  });
+  if (context.mounted) await _message(context, summary);
+}
+
+Future<void> _export(BuildContext context, CanController c) async {
+  if (!c.hasMessages) return _message(context, CanStrings.nothingToExport, title: CanStrings.exportDbc);
+  await c.exportDbc();
+}
+
+/// The original's picker: messages with their signals, ticking a message ticks its signals, ticking a signal ticks
+/// its message.
+class _DbcPicker extends StatefulWidget {
+  const _DbcPicker(this.messages, {required this.transmit});
+  final List<DbcMessage> messages;
+  final bool transmit;
+
+  @override
+  State<_DbcPicker> createState() => _DbcPickerState();
+}
+
+class _DbcPickerState extends State<_DbcPicker> {
+  late final _on = List.filled(widget.messages.length, false);
+  late final _sig = [
+    for (final m in widget.messages) [for (final _ in m.signals) false],
+  ];
+
+  void _all(bool v) => setState(() {
+    for (var i = 0; i < _on.length; i++) {
+      _on[i] = v;
+      _sig[i].fillRange(0, _sig[i].length, v);
+    }
+  });
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(CanStrings.pickTitle(widget.transmit)),
+    content: SizedBox(
+      width: 560,
+      height: 420,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(CanStrings.pickPrompt),
+          Row(
+            children: [
+              TextButton(onPressed: () => _all(true), child: const Text(CanStrings.all)),
+              TextButton(onPressed: () => _all(false), child: const Text(CanStrings.noneSelected)),
+            ],
+          ),
+          Expanded(
+            child: ListView(
+              children: [
+                for (final (i, m) in widget.messages.indexed) ...[
+                  CheckboxListTile(
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: _on[i],
+                    title: Text(dbcPickText(m)),
+                    onChanged: (v) => setState(() {
+                      _on[i] = v ?? false;
+                      _sig[i].fillRange(0, _sig[i].length, _on[i]);
+                    }),
+                  ),
+                  for (final (j, s) in m.signals.indexed)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 32),
+                      child: CheckboxListTile(
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _sig[i][j],
+                        title: Text('${s.name}  ${s.startBit}|${s.length}'),
+                        onChanged: (v) => setState(() {
+                          _sig[i][j] = v ?? false;
+                          if (_sig[i][j]) _on[i] = true;
+                        }),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text(CanStrings.cancel)),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, [
+          for (final (i, m) in widget.messages.indexed)
+            if (_on[i] && _sig[i].contains(true))
+              (
+                m,
+                [
+                  for (final (j, s) in m.signals.indexed)
+                    if (_sig[i][j]) s,
+                ],
+              ),
+        ]),
+        child: const Text(CanStrings.import),
+      ),
+    ],
+  );
+}
 
 class _CanView extends StatelessWidget {
   const _CanView();
@@ -49,10 +197,13 @@ class _CanView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(CanStrings.title, style: theme.textTheme.titleLarge),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
               SegmentedButton<bool>(
                 segments: const [
                   ButtonSegment(value: false, label: Text(CanStrings.inputs)),
@@ -62,12 +213,17 @@ class _CanView extends StatelessWidget {
                 onSelectionChanged: (s) => c.side(s.first),
               ),
               const SizedBox(width: 16),
-              Expanded(
-                child: Text(c.note ?? '', textAlign: TextAlign.end, maxLines: 2, overflow: TextOverflow.ellipsis),
+              TextButton.icon(
+                onPressed: () => _import(context, c),
+                icon: const Icon(Icons.file_open_outlined),
+                label: const Text(CanStrings.importDbc),
               ),
-              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: () => _export(context, c),
+                icon: const Icon(Icons.save_alt),
+                label: const Text(CanStrings.exportDbc),
+              ),
               TextButton(onPressed: c.dirty ? c.revert : null, child: const Text(CanStrings.revert)),
-              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: c.canSave && c.dirty && c.allValid ? c.save : null,
                 icon: const Icon(Icons.save),
@@ -75,6 +231,7 @@ class _CanView extends StatelessWidget {
               ),
             ],
           ),
+          if (c.note != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(c.note!)),
           if (!c.canSave && !c.busy) Text(CanStrings.readOnly, style: TextStyle(color: theme.colorScheme.error)),
           const SizedBox(height: 12),
           Expanded(

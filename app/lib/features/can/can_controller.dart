@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,7 +10,7 @@ import 'strings.dart';
 /// The custom CAN configuration (driver 8253's private data) as a working copy: twelve receive and twelve transmit
 /// messages of eight signals each, checked the original's way and saved and stored through the write gate.
 class CanController extends ChangeNotifier {
-  CanController(this._session, this._gate, this._policy) {
+  CanController(this._session, this._gate, this._policy, this._saver) {
     _sub = _session.states.listen((_) {
       if (config == null) _load();
       notifyListeners();
@@ -21,6 +23,7 @@ class CanController extends ChangeNotifier {
   final Session _session;
   final WriteGate _gate;
   final SwitchablePolicy _policy;
+  final FileSaver _saver;
   late final StreamSubscription<SessionState> _sub;
 
   CustomCanConfig? config;
@@ -145,6 +148,26 @@ class CanController extends ChangeNotifier {
       }
     }
     return out;
+  }
+
+  /// Imports the chosen DBC messages into this side's slots, asking before an id is replaced; the summary text.
+  Future<String> importDbc(List<(DbcMessage, List<DbcSignal>)> selection, ReplaceQuestion ask) async {
+    final c = config;
+    if (c == null) return '';
+    final r = transmit ? await importTx(c, selection, ask: ask) : await importRx(c, selection, ask: ask);
+    if (r.added > 0) dirty = true;
+    notifyListeners();
+    return dbcImportSummary(r);
+  }
+
+  bool get hasMessages => transmit ? config!.tx.any((m) => m.enabled) : config!.rx.any((m) => m.enabled);
+
+  Future<void> exportDbc() async {
+    final c = config;
+    if (c == null) return;
+    String? name(int id) => _session.calibration?.definition.links[id]?.name;
+    final text = transmit ? exportTxDbc(c.tx, name) : exportRxDbc(c.rx, name);
+    await _saver.save(CanStrings.exportName(transmit), Uint8List.fromList(utf8.encode(text)));
   }
 
   /// Encodes the working copy into the driver's private data (with its checksum), sends the driver and stores it.

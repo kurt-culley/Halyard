@@ -13,6 +13,7 @@ export 'src/calibration/presets.dart';
 export 'src/calibration/table_editing.dart';
 export 'src/can/can_bits.dart';
 export 'src/can/custom_can.dart';
+export 'src/can/custom_can_dbc.dart';
 export 'src/can/dbc.dart';
 export 'src/definition/definition.dart';
 export 'src/definition/definition_library.dart';

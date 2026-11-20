@@ -48,6 +48,21 @@ abstract final class CanStrings {
       'If no data source is set, then the "Fixed value" will be transmitted for this variable. Values are quantized '
       'before transmit: raw = round((value - offset) / multiplier), clamped to the range of the bit length and '
       'signedness.';
+  static const importDbc = 'Import DBC…';
+  static const exportDbc = 'Export DBC…';
+  static const dbcType = 'DBC files';
+  static String pickTitle(bool tx) => 'Select CAN ${tx ? 'Output' : 'Input'} Messages and Signals to Import';
+  static const pickPrompt = 'Tick the CAN messages and signals you want to import from this DBC:';
+  static const all = 'Select all';
+  static const noneSelected = 'Select none';
+  static const import = 'Import';
+  static const cancel = 'Cancel';
+  static const yes = 'Yes';
+  static const no = 'No';
+  static const ok = 'OK';
+  static const nothingToExport = 'There are no messages to export.';
+  static String unreadableDbc(String why) => 'The DBC file could not be read: $why';
+  static String exportName(bool tx) => tx ? 'custom-can-outputs.dbc' : 'custom-can-inputs.dbc';
   static String failed(String what) => 'The ECU did not accept the configuration ($what).';
   static String hex(int v) => '0x${formatCanId(v)}';
 
