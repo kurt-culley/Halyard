@@ -454,4 +454,24 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);
   });
+
+  testWidgets('unit preferences change, are kept, and come back on the next start', (tester) async {
+    final storage = _MemoryStorage();
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(_definition()), storage: storage, folders: _NoFolders()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Preferences'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('psi'));
+    await tester.tap(find.text('°F'));
+    await tester.pumpAndSettle();
+    expect(utf8.decode(storage.files['preferences.json']!), contains('"pressure":"PSI"'));
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(DesktopRoot(ports: _FakePorts(_definition()), storage: storage, folders: _NoFolders()));
+    await tester.pumpAndSettle();
+    final units = tester.element(find.text('Connect').first).read<ValueNotifier<UnitPreferences>>().value;
+    expect(units.pressure, MeasurementUnit.psi);
+    expect(units.temperature, MeasurementUnit.fahrenheit);
+  });
 }

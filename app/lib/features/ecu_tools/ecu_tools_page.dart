@@ -76,7 +76,7 @@ class _ClockState extends State<_Clock> {
               t == null
                   ? EcuToolsStrings.noClock
                   : '${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}  ${_two(t.day)}/${_two(t.month)}/${t.year}',
-              style: theme.textTheme.headlineSmall,
+              style: t == null ? theme.textTheme.bodyMedium : theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
             const Text(EcuToolsStrings.newTime),

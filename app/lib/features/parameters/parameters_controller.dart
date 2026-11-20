@@ -19,7 +19,10 @@ typedef LinkChoiceRow = ({String name, String value});
 
 /// The ECU's settings pages, read only, in the units the user reads.
 class ParametersController extends ChangeNotifier {
-  ParametersController(this._session, this._gate, this._policy, {this.units = defaultUnitPreferences}) {
+  ParametersController(this._session, this._gate, this._policy, {ValueNotifier<UnitPreferences>? units})
+    // ignore: prefer_initializing_formals, a named parameter can't be private
+    : _units = units {
+    _units?.addListener(notifyListeners);
     _sub = _session.states.listen((_) => notifyListeners());
   }
 
@@ -64,7 +67,8 @@ class ParametersController extends ChangeNotifier {
   }
 
   String nameOf(int index) => settingName(param(index)!);
-  final UnitPreferences units;
+  final ValueNotifier<UnitPreferences>? _units;
+  UnitPreferences get units => _units?.value ?? defaultUnitPreferences;
   late final StreamSubscription<SessionState> _sub;
   int? selected;
 
@@ -123,6 +127,7 @@ class ParametersController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _units?.removeListener(notifyListeners);
     unawaited(_sub.cancel());
     super.dispose();
   }

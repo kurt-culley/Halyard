@@ -95,7 +95,12 @@ class ParametersPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (c) => ParametersController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>()),
+    create: (c) => ParametersController(
+      c.read<Session>(),
+      c.read<WriteGate>(),
+      c.read<SwitchablePolicy>(),
+      units: c.read<ValueNotifier<UnitPreferences>>(),
+    ),
     child: Consumer<ParametersController>(
       builder: (context, c, _) {
         if (!c.isOnline) return const Center(child: Text(ParametersStrings.notOnline));

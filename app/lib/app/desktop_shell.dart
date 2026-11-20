@@ -31,6 +31,7 @@ class DesktopShellPage extends StatelessWidget {
     ('Trigger', Icons.ssid_chart, TriggerScopeRoute()),
     ('Faults', Icons.report_problem_outlined, FaultsRoute()),
     ('ECU tools', Icons.build_outlined, EcuToolsRoute()),
+    ('Preferences', Icons.settings_outlined, SettingsRoute()),
     ('Bench test', Icons.fact_check, BenchRoute()),
   ];
   static final _pagesTab = _destinations.indexWhere((d) => d.$3 is WorkspaceRoute);

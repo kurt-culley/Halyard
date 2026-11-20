@@ -8,6 +8,7 @@ import '../platform/storage.dart';
 import '../workspace/tile_source.dart';
 import '../workspace/workspace_controller.dart';
 import 'desktop_router.dart';
+import 'preferences.dart';
 
 /// The desktop and web composition root: one connection and session for the app's life, the user's saved
 /// definitions, the link the connect feature chooses and the write gate. The link is read only until the user says
@@ -46,6 +47,7 @@ class _DesktopRootState extends State<DesktopRoot> {
   SavedDefinitions? _saved;
   WorkspaceController? _workspace;
   AppStorage? _storage;
+  ValueNotifier<UnitPreferences>? _units;
   late final List<TileSource> _tiles = [for (final style in LiveStyle.values) LiveTiles(_session, style: style)];
 
   @override
@@ -64,9 +66,11 @@ class _DesktopRootState extends State<DesktopRoot> {
     final failed = await saved.restore();
     final workspace = WorkspaceController(storage);
     await workspace.load();
+    final units = await Preferences.load(storage);
     if (!mounted) return;
     setState(() {
       _storage = storage;
+      _units = units;
       _saved = saved;
       _workspace = workspace;
     });
@@ -85,6 +89,7 @@ class _DesktopRootState extends State<DesktopRoot> {
     _connection.disconnect();
     _link.dispose();
     _workspace?.dispose();
+    _units?.dispose();
     super.dispose();
   }
 
@@ -95,6 +100,7 @@ class _DesktopRootState extends State<DesktopRoot> {
     return MultiProvider(
       providers: [
         Provider<AppStorage>.value(value: _storage!),
+        ChangeNotifierProvider<ValueNotifier<UnitPreferences>>.value(value: _units!),
         Provider.value(value: saved),
         ChangeNotifierProvider.value(value: workspace),
         Provider.value(value: _tiles),

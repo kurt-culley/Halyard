@@ -171,6 +171,22 @@ class ParametersRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [SettingsPage]
+class SettingsRoute extends PageRouteInfo<void> {
+  const SettingsRoute({List<PageRouteInfo>? children})
+    : super(SettingsRoute.name, initialChildren: children);
+
+  static const String name = 'SettingsRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const SettingsPage();
+    },
+  );
+}
+
+/// generated route for
 /// [TablesPage]
 class TablesRoute extends PageRouteInfo<void> {
   const TablesRoute({List<PageRouteInfo>? children})
