@@ -45,6 +45,25 @@ abstract final class TablesStrings {
   static const paste = 'Paste (Ctrl+V)';
   static const graph = 'Graph';
   static const view3d = '3D';
+  static const decimals = 'Decimal places';
+  static const auto = 'Auto';
+  // Presets: the original's words, except that the library here is the user's own.
+  static const importPreset = 'Import from preset library';
+  static const savePreset = 'Save as preset';
+  static const presetsTitle = 'Import from library';
+  static const presetSearch = 'Insert text here...';
+  static const presetColumns = ['Source', 'Name', 'Details'];
+  static const load = 'Load';
+  static const close = 'Close';
+  static const addPresetFiles = 'Add preset files…';
+  static const presetFileType = 'Presets';
+  static const noPresets = 'There is no data available for this table.';
+  static const presetFailed = 'This preset could not be loaded!';
+  static const presetSaved = 'Preset Saved!';
+  static const presetSize = 'Presets hold tables of 2, 16 or 32 points, or 8x8, 16x16 or 32x32 maps.';
+  static String presetUnreadable(String why) => 'That is not a preset file: $why';
+  static const saveAsTitle = 'Save As';
+  static const saveAsText = 'File name (kept with your presets):';
   static const interpolateOutput = 'Interpolate Output';
   static const horizontally = 'Horizontally';
   static const vertically = 'Vertically';

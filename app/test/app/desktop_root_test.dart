@@ -474,4 +474,45 @@ void main() {
     expect(units.pressure, MeasurementUnit.psi);
     expect(units.temperature, MeasurementUnit.fahrenheit);
   });
+
+  testWidgets('a table saved as a preset loads back over a change', (tester) async {
+    final xml = _definition();
+    final ports = _FakePorts(xml);
+    await _bigWindow(tester);
+    await tester.pumpWidget(DesktopRoot(ports: ports, storage: _MemoryStorage(), folders: _NoFolders()));
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', xml);
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await _settle(tester, 20);
+    await tester.tap(find.text('Tables'));
+    await _settle(tester, 3);
+    final c = tester.element(find.text('Choose a table.')).read<TablesController>();
+    final def = readDeviceFile(xml).definition;
+    final fits = c.tables.firstWhere((t) {
+      final d = def.tables[t.id]!;
+      return validPresetSizes(d.cols, d.isMap ? d.rows : 0);
+    });
+    c.select(fits.id);
+    await _settle(tester, 3);
+    final before = ports.ecu.calibration.tables[fits.id]!.z[0];
+    await c.saveAsPreset('mine');
+    expect(c.message, 'Preset Saved!');
+    c.press((1, 1));
+    final setting = c.setValue('${before + 5}');
+    await _settle(tester, 5);
+    await setting;
+    expect(ports.ecu.calibration.tables[fits.id]!.z[0], isNot(before));
+    final row = c.presetRows('mine').single;
+    expect(row.source, 'mine');
+    final loading = c.loadPreset(row.preset);
+    await _settle(tester, 5);
+    expect(await loading, isTrue);
+    expect(ports.ecu.calibration.tables[fits.id]!.z[0], before);
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
 }

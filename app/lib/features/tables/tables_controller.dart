@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'grid_selection.dart';
 import 'strings.dart';
+import 'table_presets.dart';
 
 typedef TableEntry = ({int id, String name, String category});
 
@@ -40,7 +41,9 @@ typedef TableMenu = ({
 /// The ECU's tables by category; the chosen one as text, shades and lines with its live place; and the
 /// original's grid editing over it, each change sent through the write gate.
 class TablesController extends ChangeNotifier {
-  TablesController(this._session, this._gate, this._policy) {
+  TablesController(this._session, this._gate, this._policy, [AppStorage? storage])
+    : presets = storage == null ? null : TablePresets(storage) {
+    presets?.load().then((_) => notifyListeners()).ignore();
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) => _tick());
   }
 
@@ -55,6 +58,12 @@ class TablesController extends ChangeNotifier {
   String filter = '';
   bool follow = false;
   int smoothRadius = 1;
+
+  /// The user's preset files; null without app storage.
+  final TablePresets? presets;
+
+  /// Decimal places for every table, or null for each table's own (the original's one display setting).
+  static int? decimals;
 
   /// Value indexes marked tuned, by table: the original kept these with the table, not the ECU.
   final _tuned = <int, Set<int>>{};
@@ -406,6 +415,56 @@ class TablesController extends ChangeNotifier {
     });
   }
 
+  void setDecimals(int? d) {
+    decimals = d;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------- presets
+
+  List<PresetRow> presetRows(String search) =>
+      selected == null ? const [] : presets?.rows(selected!, search) ?? const [];
+
+  /// Loads a preset's axes and values into the table and sends it, as the original did; false when it doesn't fit.
+  Future<bool> loadPreset(TablePreset p) async {
+    final v = _values;
+    if (v == null || !canEdit) return false;
+    final y = p.input1.isEmpty ? v.y : p.input1;
+    if (p.input0.length != v.x.length || y.length != v.y.length || p.output.length != v.z.length) {
+      message = TablesStrings.presetFailed;
+      notifyListeners();
+      return false;
+    }
+    await _edit((t) {
+      t.x.setAll(0, p.input0);
+      t.y.setAll(0, y);
+      t.z.setAll(0, p.output);
+    });
+    return true;
+  }
+
+  Future<void> addPresetFile(String name, String text) async {
+    try {
+      await presets?.addFile(name, text);
+      message = null;
+    } on PresetError catch (e) {
+      message = TablesStrings.presetUnreadable(e.message);
+    }
+    notifyListeners();
+  }
+
+  Future<void> saveAsPreset(String name) async {
+    final d = _def, v = _values;
+    if (d == null || v == null || presets == null || name.trim().isEmpty) return;
+    try {
+      await presets!.save(name, d, v);
+      message = TablesStrings.presetSaved;
+    } on PresetError {
+      message = TablesStrings.presetSize;
+    }
+    notifyListeners();
+  }
+
   Future<void> store() async {
     final id = selected;
     if (id == null || !canEdit) return;
@@ -434,7 +493,7 @@ class TablesController extends ChangeNotifier {
     if (d == null || v == null || (r == 0 && c == 0)) return '';
     if (r == 0) return formatDecimals(v.x[c - 1], 0, 2);
     if (c == 0) return formatDecimals(v.y[r - 1], 0, 2);
-    final f = tableDecimals(d, _session.calibration!.definition.links[d.outputLinkId]);
+    final f = tableDecimals(d, _session.calibration!.definition.links[d.outputLinkId], decimals: decimals);
     return formatDecimals(v.z[(r - 1) * v.x.length + (c - 1)], f.min, f.max);
   }
 
@@ -444,7 +503,7 @@ class TablesController extends ChangeNotifier {
     if (cal == null || id == null || d == null || v == null) return null;
     final links = cal.definition.links;
     final out = links[d.outputLinkId];
-    final f = tableDecimals(d, out);
+    final f = tableDecimals(d, out, decimals: decimals);
     String axis(double x) => formatDecimals(x, 0, 2);
     final finite = v.z.where((z) => z.isFinite);
     final lo = finite.isEmpty ? 0.0 : finite.reduce((a, b) => a < b ? a : b);

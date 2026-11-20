@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,7 +17,8 @@ class TablesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (c) => TablesController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>()),
+    create: (c) =>
+        TablesController(c.read<Session>(), c.read<WriteGate>(), c.read<SwitchablePolicy>(), c.read<AppStorage>()),
     child: Consumer<TablesController>(
       builder: (context, c, _) {
         if (!c.isOnline) return const Center(child: Text(TablesStrings.notOnline));
@@ -174,6 +176,16 @@ class _EditorState extends State<_Editor> {
     return KeyEventResult.handled;
   }
 
+  Future<void> _savePreset() async {
+    final name = await _ask(TablesStrings.saveAsTitle, TablesStrings.saveAsText, '');
+    if (name != null) await c.saveAsPreset(name);
+  }
+
+  Future<void> _importPreset() async {
+    await showDialog<void>(context: context, builder: (_) => _PresetDialog(c));
+    _focus.requestFocus();
+  }
+
   Future<void> _menu((int, int) cell, Offset at, TableView view) async {
     final m = c.menu(cell);
     final items = <PopupMenuEntry<Future<void> Function()>>[];
@@ -222,6 +234,9 @@ class _EditorState extends State<_Editor> {
     }
     if (c.markStart != null || c.markEnd != null) item(TablesStrings.clearMarks, () async => c.clearMarks());
     if (items.isNotEmpty) items.add(const PopupMenuDivider());
+    item(TablesStrings.importPreset, _importPreset, enabled: edit);
+    item(TablesStrings.savePreset, _savePreset);
+    items.add(const PopupMenuDivider());
     item(TablesStrings.copyAxis(view.across), () async => c.copyAxis(true));
     if (view.isMap) item(TablesStrings.copyAxis(view.down), () async => c.copyAxis(false));
     if (c.hasAxisClipboard) {
@@ -326,6 +341,18 @@ class _EditorState extends State<_Editor> {
                   onChanged: (r) => c.setRadius(r ?? 1),
                 ),
               ),
+              Tooltip(
+                message: TablesStrings.decimals,
+                child: DropdownButton<int?>(
+                  value: TablesController.decimals,
+                  underline: const SizedBox(),
+                  items: [
+                    const DropdownMenuItem(child: Text('.${TablesStrings.auto}')),
+                    for (var d = 0; d <= 4; d++) DropdownMenuItem(value: d, child: Text('.$d')),
+                  ],
+                  onChanged: c.setDecimals,
+                ),
+              ),
               const SizedBox(height: 24, child: VerticalDivider()),
               IconButton(tooltip: TablesStrings.tuned, onPressed: c.markTuned, icon: const Icon(Icons.flag_outlined)),
               IconButton(tooltip: TablesStrings.copy, onPressed: c.copy, icon: const Icon(Icons.copy)),
@@ -419,6 +446,92 @@ class _EditorState extends State<_Editor> {
           Text(TablesStrings.hint, style: theme.textTheme.bodySmall),
         ],
       ),
+    );
+  }
+}
+
+/// The original's "Import from library" window: search, a list of source, name and details, and Load.
+class _PresetDialog extends StatefulWidget {
+  const _PresetDialog(this.c);
+  final TablesController c;
+
+  @override
+  State<_PresetDialog> createState() => _PresetDialogState();
+}
+
+class _PresetDialogState extends State<_PresetDialog> {
+  String _search = '';
+  PresetRow? _selected;
+
+  Future<void> _addFiles() async {
+    final files = await openFiles(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: TablesStrings.presetFileType, extensions: ['mepres']),
+      ],
+    );
+    for (final f in files) {
+      await widget.c.addPresetFile(f.name, await f.readAsString());
+    }
+    setState(() {});
+  }
+
+  Future<void> _load() async {
+    final s = _selected;
+    if (s == null) return;
+    if (await widget.c.loadPreset(s.preset) && mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = widget.c.presetRows(_search);
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text(TablesStrings.presetsTitle),
+      content: SizedBox(
+        width: 640,
+        height: 380,
+        child: Column(
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: TablesStrings.presetSearch),
+              onChanged: (v) => setState(() => _search = v),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: rows.isEmpty
+                  ? const Center(child: Text(TablesStrings.noPresets))
+                  : ListView(
+                      children: [
+                        for (final r in rows)
+                          ListTile(
+                            dense: true,
+                            selected: identical(_selected?.preset, r.preset),
+                            title: Text(r.name),
+                            subtitle: Text('${r.source}${r.details.isEmpty ? '' : '  ·  ${r.details}'}'),
+                            onTap: () => setState(() => _selected = r),
+                            onLongPress: _load,
+                          ),
+                      ],
+                    ),
+            ),
+            if (widget.c.message != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(widget.c.message!, style: TextStyle(color: theme.colorScheme.error)),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: _addFiles,
+          icon: const Icon(Icons.folder_open),
+          label: const Text(TablesStrings.addPresetFiles),
+        ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text(TablesStrings.close)),
+        FilledButton(onPressed: _selected == null ? null : _load, child: const Text(TablesStrings.load)),
+      ],
     );
   }
 }
