@@ -70,6 +70,14 @@ class SimEcu {
 
   /// Password protection; null for an unprotected ECU. The TypeScript simulator had none.
   SimPassword? password;
+
+  /// Answers the clock, factory reset and lock requests, which the TypeScript simulator left unsupported; off by
+  /// default so scripted sessions match it.
+  bool ecuTools = false;
+
+  /// The last clock the host set, and how many factory resets it asked for.
+  ({int day, int month, int year, int hour, int minute})? clockSetTo;
+  int factoryResets = 0;
   bool reporting = false;
 
   /// Live values sweep inside these ranges when the definition gives none.
@@ -147,6 +155,31 @@ class SimEcu {
           ..._u16(ids.length),
           for (final i in ids) ...[..._u16(i), ..._u16(c.hashFor(i)!)],
         ]);
+      // Not in the TypeScript simulator: the clock, factory reset and setting the lock, for the ECU tools.
+      case (4, 2) when ecuTools:
+        if (p.length < 6) return reply(4, 2, [1]);
+        clockSetTo = (day: p[0], month: p[1], year: p[2] | p[3] << 8, hour: p[4], minute: p[5]);
+        reply(4, 2, [0]);
+      case (4, 3) when ecuTools:
+        factoryResets++;
+        reply(4, 3, [0]);
+      case (4, 4) when ecuTools:
+        if (p.length < 120) return reply(4, 4, [1, 0, 0]);
+        String text(int from, int width) =>
+            String.fromCharCodes(p.sublist(from, from + width).takeWhile((b) => b != 0));
+        final lock = p[0] != 0, temporary = p[1] != 0, secret = text(8, 16), contact = text(24, 96);
+        final pw = password;
+        if (lock) {
+          if (pw != null && pw.locked) return reply(4, 4, [1, 1, pw.temporary ? 1 : 0]);
+          password = SimPassword(contact: contact, secret: secret);
+        } else {
+          if (pw == null || !pw.locked && !pw.temporary) return reply(4, 4, [0, 0, 0]);
+          if (secret != pw.secret) return reply(4, 4, [1, pw.locked ? 1 : 0, pw.temporary ? 1 : 0]);
+          password =
+              temporary ? SimPassword(locked: false, temporary: true, contact: pw.contact, secret: pw.secret) : null;
+        }
+        final now = password;
+        reply(4, 4, [0, if (now?.locked ?? false) 1 else 0, if (now?.temporary ?? false) 1 else 0]);
       case (4, 5):
         final pw = password;
         reply(4, 5, [
@@ -293,9 +326,12 @@ class SimEcu {
 
 /// The simulated ECU's password protection.
 final class SimPassword {
-  const SimPassword({this.locked = true, this.temporary = false, this.contact = ''});
+  const SimPassword({this.locked = true, this.temporary = false, this.contact = '', this.secret = ''});
   final bool locked, temporary;
   final String contact;
+
+  /// The password that unlocks it.
+  final String secret;
 }
 
 /// A smooth sweep for link [id] between [min] and [max] (0–100 above [min] when the range is unusable).

@@ -110,6 +110,7 @@ class ConnectController extends ChangeNotifier {
     final ecu = SimEcu(file.calibration.copy(), reportPeriod: const Duration(milliseconds: 100));
     ecu.faults.seed();
     ecu.dataLog.seed();
+    ecu.ecuTools = true;
     _link.value = (baud) => openSimulator(ecu, baud);
     _connection.connect();
   }

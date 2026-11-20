@@ -6,11 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:halyard/app/desktop_root.dart';
 import 'package:halyard/features/calibration/calibration_controller.dart';
 import 'package:halyard/features/connect/connect_controller.dart';
+import 'package:halyard/features/ecu_tools/ecu_tools_controller.dart';
 import 'package:halyard/features/faults/faults_controller.dart';
 import 'package:halyard/features/logging/logging_controller.dart';
 import 'package:halyard/features/logging/onboard_controller.dart';
+import 'package:halyard/features/logging/playback_controller.dart';
 import 'package:halyard/features/parameters/parameters_controller.dart';
-import 'package:halyard/features/playback/playback_controller.dart';
 import 'package:halyard/features/tables/tables_controller.dart';
 import 'package:halyard/features/trigger_scope/trigger_scope_controller.dart';
 import 'package:halyard/instruments/log_plot.dart';
@@ -410,6 +411,45 @@ void main() {
       await c.erase();
       expect(c.error, 'The engine must be stopped to erase the fault log history.');
     }
+
+    await tester.pumpWidget(const SizedBox());
+    await _settle(tester, 20);
+  });
+
+  testWidgets('ECU tools lock and unlock with a password and set the clock', (tester) async {
+    await _bigWindow(tester);
+    await tester.pumpWidget(
+      DesktopRoot(ports: _FakePorts(_definition()), storage: _MemoryStorage(), folders: _NoFolders()),
+    );
+    await tester.pumpAndSettle();
+    await tester.element(find.text('Definitions')).read<ConnectController>().addDefinition('demo.medef', _definition());
+    await tester.pump();
+    await tester.tap(find.text('Read only'));
+    await tester.pump();
+    await tester.tap(find.text('Start demo'));
+    await _settle(tester, 20);
+    await tester.tap(find.text('ECU tools'));
+    await _settle(tester, 3);
+    final c = tester.element(find.text('Password Protection')).read<EcuToolsController>();
+    expect(c.view.state, 'Unlocked - Permanent.');
+    expect(c.lockCheck('a' * 17, 'a' * 17), 'Please enter a password no longer than 16 characters.');
+    expect(c.lockCheck('abc', 'abd'), "The two passwords don't match.");
+    final f253 = c.lock('abc', 'call me');
+    await _settle(tester, 10);
+    await f253;
+    expect(c.locked, isTrue);
+    final f410 = c.unlock('abc', permanent: true);
+    await _settle(tester, 10);
+    await f410;
+    expect(c.locked, isFalse);
+    expect(c.temporary, isFalse);
+    final f264 = c.setTime(DateTime(2026, 11, 20, 9, 30));
+    await _settle(tester, 10);
+    await f264;
+    expect(c.message, 'Sent. The ECU keeps no seconds from this.');
+    final reset = c.factoryReset();
+    await _settle(tester, 25);
+    expect(await reset, isTrue);
 
     await tester.pumpWidget(const SizedBox());
     await _settle(tester, 20);

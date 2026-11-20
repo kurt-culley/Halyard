@@ -91,6 +91,22 @@ class DesktopShellRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [EcuToolsPage]
+class EcuToolsRoute extends PageRouteInfo<void> {
+  const EcuToolsRoute({List<PageRouteInfo>? children})
+    : super(EcuToolsRoute.name, initialChildren: children);
+
+  static const String name = 'EcuToolsRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const EcuToolsPage();
+    },
+  );
+}
+
+/// generated route for
 /// [FaultsPage]
 class FaultsRoute extends PageRouteInfo<void> {
   const FaultsRoute({List<PageRouteInfo>? children})

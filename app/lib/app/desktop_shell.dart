@@ -4,7 +4,7 @@ import 'package:halyard_core/halyard_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../features/playback/playback_strip.dart';
+import '../features/logging/playback_strip.dart';
 import '../workspace/choice_dialog.dart';
 import '../workspace/page_layout.dart';
 import '../workspace/strings.dart';
@@ -30,6 +30,7 @@ class DesktopShellPage extends StatelessWidget {
     ('Logging', Icons.timeline, LoggingRoute()),
     ('Trigger', Icons.ssid_chart, TriggerScopeRoute()),
     ('Faults', Icons.report_problem_outlined, FaultsRoute()),
+    ('ECU tools', Icons.build_outlined, EcuToolsRoute()),
     ('Bench test', Icons.fact_check, BenchRoute()),
   ];
   static final _pagesTab = _destinations.indexWhere((d) => d.$3 is WorkspaceRoute);
