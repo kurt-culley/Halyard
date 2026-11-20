@@ -100,6 +100,38 @@ class CanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Turns a signal on or off. A signal turned on with no shape yet (an empty configuration is all zeros) gets 8
+  /// bits from the first free bit and a multiplier of 1, as a new signal dragged on the original's grid did.
+  void enableSignal(int i, bool on) => edit(() {
+    final used = <int>{};
+    for (final s in spans) {
+      for (var b = s.start; b < s.start + s.length && b < 64; b++) {
+        used.add(b);
+      }
+    }
+    var free = 0;
+    while (used.contains(free) && free < 56) {
+      free += 8;
+    }
+    if (rx case final m?) {
+      final s = m.signals[i]..enabled = on;
+      if (on && s.bitLength == 0) {
+        s
+          ..startBit = free
+          ..bitLength = 8;
+      }
+      if (on && s.mult == 0) s.mult = 1;
+    } else if (tx case final m?) {
+      final s = m.signals[i]..enabled = on;
+      if (on && s.bitLength == 0) {
+        s
+          ..startBit = free
+          ..bitLength = 8;
+      }
+      if (on && s.mult == 0) s.mult = 1;
+    }
+  });
+
   /// The selected message's signal spans, as (start, length, big endian) per enabled signal, in signal order.
   List<({int index, int start, int length, bool bigEndian})> get spans {
     final out = <({int index, int start, int length, bool bigEndian})>[];

@@ -141,14 +141,52 @@ class _CanView extends StatelessWidget {
 
 Widget _num(String label, num value, void Function(String) on, {double width = 110}) => SizedBox(
   width: width,
-  child: TextFormField(
-    key: ValueKey('$label$value'),
-    initialValue: '$value',
-    decoration: InputDecoration(labelText: label, isDense: true),
-    onFieldSubmitted: on,
-    onTapOutside: (_) {},
-  ),
+  child: _NumField(label: label, value: '$value', onCommit: on),
 );
+
+/// A field that commits on Enter and when focus leaves, and follows its value while not being edited.
+class _NumField extends StatefulWidget {
+  const _NumField({required this.label, required this.value, required this.onCommit});
+  final String label, value;
+  final void Function(String) onCommit;
+
+  @override
+  State<_NumField> createState() => _NumFieldState();
+}
+
+class _NumFieldState extends State<_NumField> {
+  late final _text = TextEditingController(text: widget.value);
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus && _text.text != widget.value) widget.onCommit(_text.text);
+    });
+  }
+
+  @override
+  void didUpdateWidget(_NumField old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && _text.text != widget.value) _text.text = widget.value;
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _text,
+    focusNode: _focus,
+    decoration: InputDecoration(labelText: widget.label, isDense: true),
+    onSubmitted: widget.onCommit,
+  );
+}
 
 Widget _linkPick(CanController c, String label, int value, void Function(int) on, {double width = 240}) => SizedBox(
   width: width,
@@ -285,7 +323,7 @@ class _SignalRow extends StatelessWidget {
               FilterChip(
                 label: Text('${CanStrings.signal} ${i + 1}'),
                 selected: on,
-                onSelected: (v) => c.edit(() => rx != null ? rx.enabled = v : tx!.enabled = v),
+                onSelected: (v) => c.enableSignal(i, v),
               ),
               if (on) ...[
                 _num(CanStrings.start, rx?.startBit ?? tx!.startBit, (s) {
